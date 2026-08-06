@@ -62,3 +62,20 @@ offline_signature_attach(
     ],
     tags = ["manual"],
 )
+
+offline_presigning_artifacts(
+    name = "presigning_delegation_test",
+    testonly = True,
+    srcs = [
+        "//sw/device/examples/hello_world",
+    ],
+    ecdsa_key = {
+        "//sw/device/silicon_creator/rom/keys/fake/ecdsa:ecdsa_keyset": "test_key_0",
+    },
+    owner_ecdsa_key = {
+        "//sw/device/silicon_creator/rom/keys/fake/ecdsa:ecdsa_keyset": "test_key_0",
+    },
+    manifest = "//sw/device/silicon_creator/rom_ext:manifest",
+    tags = ["manual"],
+)
+

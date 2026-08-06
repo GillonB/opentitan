@@ -107,7 +107,7 @@ def key_ext(ecdsa, rsa, spx):
     else:
         return ".{}".format(name)
 
-def _presigning_artifacts(ctx, opentitantool, src, manifest, ecdsa_key, rsa_key, spx_key, basename = None, keyname_in_filenames = False):
+def _presigning_artifacts(ctx, opentitantool, src, manifest, ecdsa_key, rsa_key, spx_key, owner_ecdsa_key = None, owner_spx_key = None, basename = None, keyname_in_filenames = False):
     """Create the pre-signing artifacts for a given input binary.
 
     Applies the manifest and public components of the keys.  Creates the
@@ -121,6 +121,8 @@ def _presigning_artifacts(ctx, opentitantool, src, manifest, ecdsa_key, rsa_key,
         ecdsa_key: struct; The ECDSA public key.
         rsa_key: struct; The RSA public key.
         spx_key: struct; The SPX+ public key.
+        owner_ecdsa_key: struct; Optional ECDSA public/private key of the owner.
+        owner_spx_key: struct; Optional SPHINCS+ public/private key of the owner.
         basename: str; Optional basename of the outputs.  Defaults to src.basename.
         keyname_in_filenames: bool; Whether or not to use the key names to construct filenames.
                               Used in test-signing flows to maintain compatibility with existing
@@ -162,6 +164,17 @@ def _presigning_artifacts(ctx, opentitantool, src, manifest, ecdsa_key, rsa_key,
         selected_spx_key = getattr(spx_key, "file", None)
         spx_args.append("--spx-key={}".format(selected_spx_key.path))
         inputs.append(selected_spx_key)
+
+    owner_args = []
+    if owner_ecdsa_key:
+        selected_owner_ecdsa_key = getattr(owner_ecdsa_key, "file", None)
+        owner_args.append("--owner-ecdsa-key={}".format(selected_owner_ecdsa_key.path))
+        inputs.append(selected_owner_ecdsa_key)
+    if owner_spx_key:
+        selected_owner_spx_key = getattr(owner_spx_key, "file", None)
+        owner_args.append("--owner-spx-key={}".format(selected_owner_spx_key.path))
+        inputs.append(selected_owner_spx_key)
+
     ctx.actions.run(
         outputs = [pre],
         inputs = inputs,
@@ -175,7 +188,7 @@ def _presigning_artifacts(ctx, opentitantool, src, manifest, ecdsa_key, rsa_key,
             "--domain={}".format(spx_domain),
             "--output={}".format(pre.path),
             src.path,
-        ] + ecdsa_or_rsa_args + spx_args,
+        ] + ecdsa_or_rsa_args + spx_args + owner_args,
         executable = opentitantool,
         mnemonic = "PreSigningArtifacts",
     )
@@ -498,6 +511,8 @@ def _offline_presigning_artifacts(ctx):
     ecdsa_key = key_from_dict(ctx.attr.ecdsa_key, "ecdsa_key")
     rsa_key = key_from_dict(ctx.attr.rsa_key, "rsa_key")
     spx_key = key_from_dict(ctx.attr.spx_key, "spx_key")
+    owner_ecdsa_key = key_from_dict(ctx.attr.owner_ecdsa_key, "owner_ecdsa_key")
+    owner_spx_key = key_from_dict(ctx.attr.owner_spx_key, "owner_spx_key")
     digests = []
     bins = []
     script = []
@@ -510,6 +525,8 @@ def _offline_presigning_artifacts(ctx):
             ecdsa_key,
             rsa_key,
             spx_key,
+            owner_ecdsa_key = owner_ecdsa_key,
+            owner_spx_key = owner_spx_key,
         )
         bins.append(artifacts.pre)
         digests.append(artifacts.digest)
@@ -548,6 +565,16 @@ offline_presigning_artifacts = rule(
             providers = [[KeySetInfo], [DefaultInfo]],
             allow_files = True,
             doc = "SPX public key to validate this image",
+        ),
+        "owner_ecdsa_key": attr.label_keyed_string_dict(
+            providers = [[KeySetInfo], [DefaultInfo]],
+            allow_files = True,
+            doc = "ECDSA private/public key of the owner to sign the delegation certificate",
+        ),
+        "owner_spx_key": attr.label_keyed_string_dict(
+            providers = [[KeySetInfo], [DefaultInfo]],
+            allow_files = True,
+            doc = "SPHINCS+ private/public key of the owner to sign the SPX delegation certificate",
         ),
     },
     toolchains = [LOCALTOOLS_TOOLCHAIN],
@@ -727,6 +754,8 @@ def sign_binary(ctx, opentitantool, **kwargs):
 
     rsa_key = key_from_dict(rsa_attr, "rsa_key")
     spx_key = key_from_dict(get_override(ctx, "attr.spx_key", kwargs), "spx_key")
+    owner_ecdsa_key = key_from_dict(get_override(ctx, "attr.owner_ecdsa_key", kwargs), "owner_ecdsa_key")
+    owner_spx_key = key_from_dict(get_override(ctx, "attr.owner_spx_key", kwargs), "owner_spx_key")
 
     artifacts = _presigning_artifacts(
         ctx,
@@ -736,6 +765,8 @@ def sign_binary(ctx, opentitantool, **kwargs):
         ecdsa_key,
         rsa_key,
         spx_key,
+        owner_ecdsa_key = owner_ecdsa_key,
+        owner_spx_key = owner_spx_key,
         keyname_in_filenames = True,
     )
     tool, signing_func, profile = _signing_tool_info(ctx, key_attr, opentitantool)
@@ -789,6 +820,14 @@ sign_bin = rv_rule(
         "spx_key": attr.label_keyed_string_dict(
             allow_files = True,
             doc = "SPX public key to validate this image",
+        ),
+        "owner_ecdsa_key": attr.label_keyed_string_dict(
+            allow_files = True,
+            doc = "ECDSA private/public key of the owner to sign the delegation certificate",
+        ),
+        "owner_spx_key": attr.label_keyed_string_dict(
+            allow_files = True,
+            doc = "SPHINCS+ private/public key of the owner to sign the SPX delegation certificate",
         ),
         "manifest": attr.label(allow_single_file = True, mandatory = True),
     },
