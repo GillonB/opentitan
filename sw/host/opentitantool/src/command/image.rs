@@ -158,6 +158,12 @@ pub struct ManifestUpdateCommand {
     /// Sign the image when private keys are are given.
     #[arg(long, action = clap::ArgAction::Set, default_value = "true")]
     private_keys_sign: bool,
+    /// Filename for the owner's ECDSA private key to sign the delegation certificate.
+    #[arg(long)]
+    owner_ecdsa_key: Option<PathBuf>,
+    /// Filename for the owner's SPHINCS+ private key to sign the SPX delegation certificate.
+    #[arg(long)]
+    owner_spx_key: Option<PathBuf>,
 }
 
 fn load_rsa_key(key_file: &Path) -> Result<(RsaPublicKey, Option<RsaPrivateKey>)> {
@@ -301,6 +307,18 @@ impl CommandDispatch for ManifestUpdateCommand {
 
         // Remove any unused extensions in the table that do not reference extension data.
         image.drop_null_extensions()?;
+
+        // Perform delegation certificate signing if owner keys are provided.
+        if let Some(owner_ecdsa_key_path) = &self.owner_ecdsa_key {
+            let (_, owner_priv) = load_ecdsa_key(owner_ecdsa_key_path)?;
+            if let Some(owner_priv_key) = owner_priv {
+                image.sign_delegation_certificate(&owner_priv_key)?;
+            }
+        }
+        if let Some(owner_spx_key_path) = &self.owner_spx_key {
+            let owner_spx_priv = SpxSecretKey::read_pem_file(owner_spx_key_path)?;
+            image.sign_delegation_certificate_spx(&owner_spx_priv)?;
+        }
 
         // This private_keys_sign gaurd is intended to sign the image
         // There are cases in which we need to not always sign the image
@@ -484,6 +502,7 @@ pub enum ManifestCommand {
 }
 
 #[derive(Debug, Subcommand, CommandDispatch)]
+#[allow(clippy::large_enum_variant)]
 /// Image manipulation commands.
 pub enum Image {
     Assemble(AssembleCommand),

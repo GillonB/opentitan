@@ -11,11 +11,11 @@ use std::mem::{align_of, offset_of, size_of};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail, ensure};
-use sphincsplus::{SphincsPlus, SpxDomain, SpxPublicKey};
+use sphincsplus::{SphincsPlus, SpxDomain, SpxPublicKey, SpxSecretKey};
 use thiserror::Error;
 use zerocopy::FromBytes;
 
-use crate::crypto::ecdsa::{EcdsaPublicKey, EcdsaRawPublicKey, EcdsaRawSignature};
+use crate::crypto::ecdsa::{EcdsaPrivateKey, EcdsaPublicKey, EcdsaRawPublicKey, EcdsaRawSignature};
 use crate::crypto::rsa::Modulus;
 use crate::crypto::rsa::RsaPublicKey;
 use crate::crypto::rsa::Signature as RsaSignature;
@@ -23,7 +23,9 @@ use crate::crypto::sha256::Sha256Digest;
 use crate::image::manifest::{
     CHIP_MANIFEST_VERSION_MAJOR1, CHIP_MANIFEST_VERSION_MAJOR2, CHIP_MANIFEST_VERSION_MINOR1,
     CHIP_ROM_EXT_IDENTIFIER, CHIP_ROM_EXT_SIZE_MAX, MANIFEST_EXT_ID_SPX_KEY,
-    MANIFEST_EXT_ID_SPX_SIGNATURE, Manifest, ManifestKind, SigverifySpxSignature,
+    MANIFEST_EXT_ID_SPX_SIGNATURE, MANIFEST_EXT_ID_DELEGATION_CERT,
+    MANIFEST_EXT_ID_DELEGATION_CERT_SPX, ManifestExtDelegationCert,
+    ManifestExtDelegationCertSpx, Manifest, ManifestKind, SigverifySpxSignature,
 };
 use crate::image::manifest_def::{ManifestSigverifyBuffer, ManifestSpec};
 use crate::image::manifest_ext::{ManifestExtEntry, ManifestExtEntrySpec};
@@ -603,6 +605,45 @@ impl Image {
     pub fn compute_digest(&self) -> Result<Sha256Digest> {
         self.map_signed_region(|v| Sha256Digest::hash(v))
     }
+
+    /// Signs the delegation certificate extension inside this image using the owner's ECDSA private key.
+    pub fn sign_delegation_certificate(&mut self, owner_key: &EcdsaPrivateKey) -> Result<()> {
+        let manifest = self.borrow_manifest()?;
+        let cert_entry = manifest
+            .extensions
+            .entries
+            .iter()
+            .find(|e| e.identifier == MANIFEST_EXT_ID_DELEGATION_CERT);
+
+        if let Some(cert_entry) = cert_entry.filter(|e| e.offset != 0) {
+            let offset = cert_entry.offset as usize;
+            let size = std::mem::size_of::<ManifestExtDelegationCert>();
+            let cert_bytes = &mut self.data.bytes[offset..offset + size];
+            let digest = Sha256Digest::hash(&cert_bytes[0..248]);
+            let signature = owner_key.sign(&digest)?;
+            cert_bytes[248..312].copy_from_slice(&signature.to_vec()?);
+        }
+        Ok(())
+    }
+
+    /// Signs the SPX delegation certificate extension inside this image using the owner's SPX private key.
+    pub fn sign_delegation_certificate_spx(&mut self, owner_spx_key: &SpxSecretKey) -> Result<()> {
+        let manifest = self.borrow_manifest()?;
+        let cert_entry = manifest
+            .extensions
+            .entries
+            .iter()
+            .find(|e| e.identifier == MANIFEST_EXT_ID_DELEGATION_CERT_SPX);
+
+        if let Some(cert_entry) = cert_entry.filter(|e| e.offset != 0) {
+            let offset = cert_entry.offset as usize;
+            let size = std::mem::size_of::<ManifestExtDelegationCertSpx>();
+            let cert_bytes = &mut self.data.bytes[offset..offset + size];
+            let signature = owner_spx_key.sign(SpxDomain::Pure, &cert_bytes[0..40])?;
+            cert_bytes[40..7896].copy_from_slice(&signature);
+        }
+        Ok(())
+    }
 }
 
 impl SubImage<'_> {
@@ -774,5 +815,112 @@ mod tests {
             .read_to_end(&mut res_bytes)
             .unwrap();
         assert_eq!(orig_bytes, res_bytes);
+    }
+
+    #[test]
+    fn test_sign_delegation_certificate() -> Result<()> {
+        let mut image = Image::read_from_file(&testdata("image/test_image.bin"))?;
+        let owner_key = EcdsaPrivateKey::new();
+        let delegate_key = EcdsaPrivateKey::new();
+        let delegate_raw_pub = EcdsaRawPublicKey::try_from(&delegate_key.public_key())?;
+
+        // Prepopulate the manifest extension table with the DelegationCert ID
+        let manifest = image.borrow_manifest_mut()?;
+        manifest.extensions.entries[0].identifier = MANIFEST_EXT_ID_DELEGATION_CERT;
+        manifest.extensions.entries[0].offset = 0;
+
+        let entry = ManifestExtEntry::new_delegation_cert_entry(
+            1, // version
+            2, // owner_key_id
+            1, // delegate_key_alg
+            &delegate_raw_pub,
+            1, // min_security_version
+            10, // max_security_version
+            3, // allowed_slots
+            12345678, // expiration_epoch
+            16384, // usage_constraint
+            [0xAA; 8], // device_id
+            0, // manuf_state_creator
+            0, // manuf_state_owner
+            0xFFFFFFFF, // life_cycle_state
+            None, // No signature yet
+        )?;
+
+        // Append the delegation cert to the image
+        image.add_manifest_extension(entry)?;
+
+        // Ensure signature is zero initially
+        let manifest = image.borrow_manifest()?;
+        let cert_entry = manifest
+            .extensions
+            .entries
+            .iter()
+            .find(|e| e.identifier == MANIFEST_EXT_ID_DELEGATION_CERT)
+            .unwrap();
+        assert_ne!(cert_entry.offset, 0);
+
+        let offset = cert_entry.offset as usize;
+        assert_eq!(&image.data.bytes[offset + 248..offset + 312], &[0u8; 64]);
+
+        // Sign the certificate
+        image.sign_delegation_certificate(&owner_key)?;
+
+        // Verify the certificate signature mathematically
+        let cert_bytes = &image.data.bytes[offset..offset + 312];
+        let digest = Sha256Digest::hash(&cert_bytes[0..248]);
+        let mut cursor = std::io::Cursor::new(&cert_bytes[248..312]);
+        let signature = EcdsaRawSignature::read(&mut cursor)?;
+
+        owner_key.public_key().verify(&digest, &signature)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_sign_delegation_certificate_spx() -> Result<()> {
+        let mut image = Image::read_from_file(&testdata("image/test_image.bin"))?;
+
+        use sphincsplus::SphincsPlus;
+        let (owner_spx_priv, owner_spx_pub) = SpxSecretKey::new_keypair(SphincsPlus::Sha2128sSimple).unwrap();
+        let (_, delegate_spx_pub) = SpxSecretKey::new_keypair(SphincsPlus::Sha2128sSimple).unwrap();
+
+        let entry = ManifestExtEntry::new_delegation_cert_spx_entry(
+            &delegate_spx_pub,
+            None, // No signature yet
+        )?;
+
+        // Prepopulate the manifest extension table with the DelegationCertSpx ID
+        let manifest = image.borrow_manifest_mut()?;
+        manifest.extensions.entries[1].identifier = MANIFEST_EXT_ID_DELEGATION_CERT_SPX;
+        manifest.extensions.entries[1].offset = 0;
+
+        // Append the delegation cert to the image
+        image.add_manifest_extension(entry)?;
+
+        // Ensure signature is zero initially
+        let manifest = image.borrow_manifest()?;
+        let cert_entry = manifest
+            .extensions
+            .entries
+            .iter()
+            .find(|e| e.identifier == MANIFEST_EXT_ID_DELEGATION_CERT_SPX)
+            .unwrap();
+        assert_ne!(cert_entry.offset, 0);
+
+        let offset = cert_entry.offset as usize;
+        // Verify signature field (offset 40 to 7896) is all zeros
+        assert_eq!(&image.data.bytes[offset + 40..offset + 7896], &[0u8; 7856]);
+
+        // Sign the certificate
+        image.sign_delegation_certificate_spx(&owner_spx_priv)?;
+
+        // Verify the certificate signature mathematically
+        let cert_bytes = &image.data.bytes[offset..offset + 7896];
+        let signature = &cert_bytes[40..7896];
+        let tbs = &cert_bytes[0..40];
+
+        owner_spx_pub.verify(SpxDomain::Pure, signature, tbs).unwrap();
+
+        Ok(())
     }
 }
