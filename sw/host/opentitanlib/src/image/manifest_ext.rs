@@ -9,6 +9,7 @@ use thiserror::Error;
 use zerocopy::IntoBytes;
 
 use crate::chip::boolean::HardenedBool;
+use crate::crypto::ecdsa::{EcdsaPublicKey, EcdsaRawPublicKey, EcdsaRawSignature};
 use crate::image::manifest::*;
 use crate::image::manifest_def::le_bytes_to_word_arr;
 use crate::util::num_de::HexEncoded;
@@ -31,6 +32,8 @@ with_unknown! {
         secver_write = MANIFEST_EXT_ID_SECVER_WRITE,
         isfb = MANIFEST_EXT_ID_ISFB,
         isfb_erase = MANIFEST_EXT_ID_ISFB_ERASE,
+        delegation_cert = MANIFEST_EXT_ID_DELEGATION_CERT,
+        delegation_cert_spx = MANIFEST_EXT_ID_DELEGATION_CERT_SPX,
     }
 }
 
@@ -82,6 +85,30 @@ pub enum ManifestExtEntrySpec {
     #[serde(alias = "isfb_erase_policy")]
     IsfbErasePolicy { erase_allowed: bool },
 
+    #[serde(alias = "delegation_cert")]
+    DelegationCert {
+        version: u32,
+        owner_key_id: u32,
+        delegate_key_alg: u32,
+        delegate_public_key: PathBuf,
+        min_security_version: u32,
+        max_security_version: u32,
+        allowed_slots: u32,
+        expiration_epoch: u64,
+        usage_constraint: u32,
+        device_id: [u32; 8],
+        manuf_state_creator: u32,
+        manuf_state_owner: u32,
+        life_cycle_state: u32,
+        owner_signature: Option<PathBuf>,
+    },
+
+    #[serde(alias = "delegation_cert_spx")]
+    DelegationCertSpx {
+        delegate_spx_key: PathBuf,
+        signature: Option<PathBuf>,
+    },
+
     #[serde(alias = "raw")]
     Raw {
         name: HexEncoded<u32>,
@@ -99,6 +126,8 @@ pub enum ManifestExtEntry {
     SecVerWrite(ManifestExtSecVerWrite),
     Isfb(ManifestExtIsfb),
     IsfbErasePolicy(ManifestExtIsfbErasePolicy),
+    DelegationCert(Box<ManifestExtDelegationCert>),
+    DelegationCertSpx(Box<ManifestExtDelegationCertSpx>),
     Raw {
         header: ManifestExtHeader,
         data: Vec<u8>,
@@ -133,6 +162,8 @@ impl ManifestExtEntrySpec {
             ManifestExtEntrySpec::Isfb { .. } => MANIFEST_EXT_ID_ISFB,
             ManifestExtEntrySpec::IsfbErasePolicy { .. } => MANIFEST_EXT_ID_ISFB_ERASE,
             ManifestExtEntrySpec::ImageType { image_type: _ } => MANIFEST_EXT_ID_IMAGE_TYPE,
+            ManifestExtEntrySpec::DelegationCert { .. } => MANIFEST_EXT_ID_DELEGATION_CERT,
+            ManifestExtEntrySpec::DelegationCertSpx { .. } => MANIFEST_EXT_ID_DELEGATION_CERT_SPX,
             ManifestExtEntrySpec::Raw { identifier, .. } => **identifier,
         }
     }
@@ -143,7 +174,9 @@ impl ManifestExtEntrySpec {
             | ManifestExtEntrySpec::SecVerWrite { .. }
             | ManifestExtEntrySpec::Isfb { .. }
             | ManifestExtEntrySpec::IsfbErasePolicy { .. }
-            | ManifestExtEntrySpec::ImageType { .. } => true,
+            | ManifestExtEntrySpec::ImageType { .. }
+            | ManifestExtEntrySpec::DelegationCert { .. }
+            | ManifestExtEntrySpec::DelegationCertSpx { .. } => true,
             ManifestExtEntrySpec::SpxSignature { .. } => false,
             ManifestExtEntrySpec::Raw { signed, .. } => *signed,
         }
@@ -231,6 +264,80 @@ impl ManifestExtEntry {
         }))
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_delegation_cert_entry(
+        version: u32,
+        owner_key_id: u32,
+        delegate_key_alg: u32,
+        delegate_public_key: &EcdsaRawPublicKey,
+        min_security_version: u32,
+        max_security_version: u32,
+        allowed_slots: u32,
+        expiration_epoch: u64,
+        usage_constraint: u32,
+        device_id: [u32; 8],
+        manuf_state_creator: u32,
+        manuf_state_owner: u32,
+        life_cycle_state: u32,
+        owner_signature: Option<&EcdsaRawSignature>,
+    ) -> Result<Self> {
+        let x = le_bytes_to_word_arr(&delegate_public_key.x)?;
+        let y = le_bytes_to_word_arr(&delegate_public_key.y)?;
+
+        let mut owner_sig = SigverifyEcdsaSignature::default();
+        if let Some(sig) = owner_signature {
+            owner_sig.r = le_bytes_to_word_arr(&sig.r)?;
+            owner_sig.s = le_bytes_to_word_arr(&sig.s)?;
+        }
+
+        Ok(ManifestExtEntry::DelegationCert(Box::new(ManifestExtDelegationCert {
+            header: ManifestExtHeader {
+                identifier: MANIFEST_EXT_ID_DELEGATION_CERT,
+                name: MANIFEST_EXT_NAME_DELEGATION_CERT,
+            },
+            version,
+            owner_key_id,
+            delegate_key_alg,
+            delegate_public_key: SigverifyEcdsaPublicKey { x, y },
+            padding: 0,
+            constraints: DelegationConstraints {
+                min_security_version,
+                max_security_version,
+                allowed_slots,
+                padding: 0,
+                expiration_epoch,
+                usage_constraint,
+                device_id: LifecycleDeviceId { device_id },
+                manuf_state_creator,
+                manuf_state_owner,
+                life_cycle_state,
+                reserved: [0; 22],
+            },
+            owner_signature: owner_sig,
+        })))
+    }
+
+    pub fn new_delegation_cert_spx_entry(
+        delegate_spx_key: &SpxPublicKey,
+        signature: Option<&[u8]>,
+    ) -> Result<Self> {
+        let mut sig = SigverifySpxSignature::default();
+        if let Some(s) = signature {
+            sig.data = le_bytes_to_word_arr(s)?;
+        }
+
+        Ok(ManifestExtEntry::DelegationCertSpx(Box::new(ManifestExtDelegationCertSpx {
+            header: ManifestExtHeader {
+                identifier: MANIFEST_EXT_ID_DELEGATION_CERT_SPX,
+                name: MANIFEST_EXT_NAME_DELEGATION_CERT_SPX,
+            },
+            delegate_spx_key: SigverifySpxKey {
+                data: le_bytes_to_word_arr(delegate_spx_key.as_bytes())?,
+            },
+            signature: sig,
+        })))
+    }
+
     /// Creates a new manifest extension from a given `spec`.
     pub fn from_spec(spec: &ManifestExtEntrySpec) -> Result<Self> {
         Ok(match spec {
@@ -267,6 +374,59 @@ impl ManifestExtEntry {
                 strike_mask,
                 product_expr,
             } => ManifestExtEntry::new_isfb_entry(**strike_mask, product_expr.to_vec())?,
+            ManifestExtEntrySpec::DelegationCert {
+                version,
+                owner_key_id,
+                delegate_key_alg,
+                delegate_public_key,
+                min_security_version,
+                max_security_version,
+                allowed_slots,
+                expiration_epoch,
+                usage_constraint,
+                device_id,
+                manuf_state_creator,
+                manuf_state_owner,
+                life_cycle_state,
+                owner_signature,
+            } => {
+                let delegate_pub = EcdsaPublicKey::load(delegate_public_key)?;
+                let raw_delegate_pub = EcdsaRawPublicKey::try_from(&delegate_pub)?;
+                let raw_owner_sig = owner_signature
+                    .as_deref()
+                    .map(EcdsaRawSignature::read_from_file)
+                    .transpose()?;
+                ManifestExtEntry::new_delegation_cert_entry(
+                    *version,
+                    *owner_key_id,
+                    *delegate_key_alg,
+                    &raw_delegate_pub,
+                    *min_security_version,
+                    *max_security_version,
+                    *allowed_slots,
+                    *expiration_epoch,
+                    *usage_constraint,
+                    *device_id,
+                    *manuf_state_creator,
+                    *manuf_state_owner,
+                    *life_cycle_state,
+                    raw_owner_sig.as_ref(),
+                )?
+            }
+            ManifestExtEntrySpec::DelegationCertSpx {
+                delegate_spx_key,
+                signature,
+            } => {
+                let delegate_spx = SpxPublicKey::read_pem_file(delegate_spx_key)?;
+                let sig_bytes = signature
+                    .as_ref()
+                    .map(std::fs::read)
+                    .transpose()?;
+                ManifestExtEntry::new_delegation_cert_spx_entry(
+                    &delegate_spx,
+                    sig_bytes.as_deref(),
+                )?
+            }
             ManifestExtEntrySpec::Raw {
                 name,
                 identifier,
@@ -291,6 +451,8 @@ impl ManifestExtEntry {
             ManifestExtEntry::SecVerWrite(sv) => &sv.header,
             ManifestExtEntry::Isfb(isfb) => &isfb.header,
             ManifestExtEntry::IsfbErasePolicy(erase) => &erase.header,
+            ManifestExtEntry::DelegationCert(cert) => &cert.header,
+            ManifestExtEntry::DelegationCertSpx(cert) => &cert.header,
             ManifestExtEntry::Raw { header, data: _ } => header,
         }
     }
@@ -304,6 +466,8 @@ impl ManifestExtEntry {
             ManifestExtEntry::SecVerWrite(sv) => sv.as_bytes().to_vec(),
             ManifestExtEntry::Isfb(isfb) => isfb.to_vec().unwrap(),
             ManifestExtEntry::IsfbErasePolicy(erase) => erase.as_bytes().to_vec(),
+            ManifestExtEntry::DelegationCert(cert) => cert.as_bytes().to_vec(),
+            ManifestExtEntry::DelegationCertSpx(cert) => cert.as_bytes().to_vec(),
             ManifestExtEntry::Raw { header, data } => {
                 header.as_bytes().iter().chain(data).copied().collect()
             }
@@ -416,6 +580,131 @@ mod tests {
         let bin = isfb.to_vec();
         eprintln!("{}", hexdump_string(&bin)?);
         assert_eq!(hexdump_string(&bin)?, MAN_EXT_ISFB_ERASE_POLICY);
+        Ok(())
+    }
+
+    #[test]
+    fn test_delegation_cert_spec_parse() {
+        let hjson = r#"{
+            extension_params: [
+                {
+                    delegation_cert: {
+                        version: 1,
+                        owner_key_id: 2,
+                        delegate_key_alg: 1,
+                        delegate_public_key: "test_delegate.pub.der",
+                        min_security_version: 1,
+                        max_security_version: 10,
+                        allowed_slots: 3,
+                        expiration_epoch: 12345678,
+                        usage_constraint: 16384,
+                        device_id: [1, 2, 3, 4, 5, 6, 7, 8],
+                        manuf_state_creator: 0,
+                        manuf_state_owner: 0,
+                        life_cycle_state: 4294967295,
+                        owner_signature: "test_owner.sig"
+                    }
+                },
+                {
+                    delegation_cert_spx: {
+                        delegate_spx_key: "test_spx.pem",
+                        signature: "test_spx.sig"
+                    }
+                }
+            ]
+        }"#;
+
+        let spec: ManifestExtSpec = deser_hjson::from_str(hjson).unwrap();
+        assert_eq!(spec.extension_params.len(), 2);
+
+        if let ManifestExtEntrySpec::DelegationCert {
+            version,
+            owner_key_id,
+            delegate_public_key,
+            device_id,
+            owner_signature,
+            ..
+        } = &spec.extension_params[0] {
+            assert_eq!(*version, 1);
+            assert_eq!(*owner_key_id, 2);
+            assert_eq!(delegate_public_key.to_str().unwrap(), "test_delegate.pub.der");
+            assert_eq!(device_id, &[1, 2, 3, 4, 5, 6, 7, 8]);
+            assert_eq!(owner_signature.as_ref().unwrap().to_str().unwrap(), "test_owner.sig");
+        } else {
+            panic!("Expected DelegationCert");
+        }
+
+        if let ManifestExtEntrySpec::DelegationCertSpx {
+            delegate_spx_key,
+            signature,
+        } = &spec.extension_params[1] {
+            assert_eq!(delegate_spx_key.to_str().unwrap(), "test_spx.pem");
+            assert_eq!(signature.as_ref().unwrap().to_str().unwrap(), "test_spx.sig");
+        } else {
+            panic!("Expected DelegationCertSpx");
+        }
+    }
+
+    #[test]
+    fn test_delegation_cert_binary_generation() -> Result<()> {
+        let raw_pub = EcdsaRawPublicKey {
+            x: vec![0x11u8; 32],
+            y: vec![0x22u8; 32],
+        };
+        let raw_sig = EcdsaRawSignature {
+            r: vec![0x33u8; 32],
+            s: vec![0x44u8; 32],
+        };
+
+        let entry = ManifestExtEntry::new_delegation_cert_entry(
+            1, // version
+            2, // owner_key_id
+            1, // delegate_key_alg
+            &raw_pub,
+            1, // min_security_version
+            10, // max_security_version
+            3, // allowed_slots
+            12345678, // expiration_epoch
+            16384, // usage_constraint
+            [0xAA; 8], // device_id
+            0, // manuf_state_creator
+            0, // manuf_state_owner
+            0xFFFFFFFF, // life_cycle_state
+            Some(&raw_sig),
+        )?;
+
+        let bytes = entry.to_vec();
+        assert_eq!(bytes.len(), 312);
+
+        // Verify some header fields
+        assert_eq!(u32::from_le_bytes(bytes[0..4].try_into().unwrap()), MANIFEST_EXT_ID_DELEGATION_CERT);
+        assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().unwrap()), MANIFEST_EXT_NAME_DELEGATION_CERT);
+        assert_eq!(u32::from_le_bytes(bytes[8..12].try_into().unwrap()), 1); // version
+        assert_eq!(u32::from_le_bytes(bytes[12..16].try_into().unwrap()), 2); // owner_key_id
+
+        // Verify delegate key algorithm
+        assert_eq!(u32::from_le_bytes(bytes[16..20].try_into().unwrap()), 1);
+
+        // Verify delegate_public_key.x contains 0x11
+        for b in &bytes[20..52] {
+            assert_eq!(*b, 0x11);
+        }
+
+        // Verify delegate_public_key.y contains 0x22
+        for b in &bytes[52..84] {
+            assert_eq!(*b, 0x22);
+        }
+
+        // Verify owner_signature.r contains 0x33
+        for b in &bytes[248..280] {
+            assert_eq!(*b, 0x33);
+        }
+
+        // Verify owner_signature.s contains 0x44
+        for b in &bytes[280..312] {
+            assert_eq!(*b, 0x44);
+        }
+
         Ok(())
     }
 }

@@ -46,12 +46,16 @@ pub const MANIFEST_EXT_ID_IMAGE_TYPE: u32 = 0x494d4754;
 pub const MANIFEST_EXT_ID_SECVER_WRITE: u32 = 0x3f086a41;
 pub const MANIFEST_EXT_ID_ISFB: u32 = 0x42465349;
 pub const MANIFEST_EXT_ID_ISFB_ERASE: u32 = 0x45465349;
+pub const MANIFEST_EXT_ID_DELEGATION_CERT: u32 = 0x43474c44;
+pub const MANIFEST_EXT_ID_DELEGATION_CERT_SPX: u32 = 0x53474c44;
 pub const MANIFEST_EXT_NAME_SPX_KEY: u32 = 0x30545845;
 pub const MANIFEST_EXT_NAME_SPX_SIGNATURE: u32 = 0x31545845;
 pub const MANIFEST_EXT_NAME_IMAGE_TYPE: u32 = 0x494d4754;
 pub const MANIFEST_EXT_NAME_SECVER_WRITE: u32 = 0x56434553;
 pub const MANIFEST_EXT_NAME_ISFB: u32 = 0x42465349;
 pub const MANIFEST_EXT_NAME_ISFB_ERASE: u32 = 0x45465349;
+pub const MANIFEST_EXT_NAME_DELEGATION_CERT: u32 = 0;
+pub const MANIFEST_EXT_NAME_DELEGATION_CERT_SPX: u32 = 0;
 pub const CHIP_ROM_EXT_IDENTIFIER: u32 = 0x4552544f;
 pub const CHIP_BL0_IDENTIFIER: u32 = 0x3042544f;
 pub const CHIP_ROM_EXT_SIZE_MIN: u32 = 8788;
@@ -223,7 +227,7 @@ pub struct ManifestExtIsfbErasePolicy {
 
 /// A type that holds the 256-bit device identifier.
 #[repr(C)]
-#[derive(Immutable, IntoBytes, FromBytes, Debug, Default)]
+#[derive(Immutable, IntoBytes, FromBytes, Debug, Default, Clone, Copy)]
 pub struct LifecycleDeviceId {
     pub device_id: [u32; 8usize],
 }
@@ -280,6 +284,57 @@ pub struct ManifestExtTable {
     pub entries: [ManifestExtTableEntry; CHIP_MANIFEST_EXT_TABLE_COUNT],
 }
 
+#[repr(C)]
+#[derive(Immutable, IntoBytes, FromBytes, Debug, Default, Clone, Copy)]
+pub struct SigverifyEcdsaPublicKey {
+    pub x: [u32; 8],
+    pub y: [u32; 8],
+}
+
+#[repr(C)]
+#[derive(Immutable, IntoBytes, FromBytes, Debug, Default, Clone, Copy)]
+pub struct SigverifyEcdsaSignature {
+    pub r: [u32; 8],
+    pub s: [u32; 8],
+}
+
+#[repr(C)]
+#[derive(Immutable, IntoBytes, FromBytes, Debug, Default, Clone, Copy)]
+pub struct DelegationConstraints {
+    pub min_security_version: u32,
+    pub max_security_version: u32,
+    pub allowed_slots: u32,
+    pub padding: u32,
+    pub expiration_epoch: u64,
+    pub usage_constraint: u32,
+    pub device_id: LifecycleDeviceId,
+    pub manuf_state_creator: u32,
+    pub manuf_state_owner: u32,
+    pub life_cycle_state: u32,
+    pub reserved: [u32; 22],
+}
+
+#[repr(C)]
+#[derive(Immutable, IntoBytes, FromBytes, Debug, Default)]
+pub struct ManifestExtDelegationCert {
+    pub header: ManifestExtHeader,
+    pub version: u32,
+    pub owner_key_id: u32,
+    pub delegate_key_alg: u32,
+    pub delegate_public_key: SigverifyEcdsaPublicKey,
+    pub padding: u32,
+    pub constraints: DelegationConstraints,
+    pub owner_signature: SigverifyEcdsaSignature,
+}
+
+#[repr(C)]
+#[derive(Immutable, IntoBytes, FromBytes, Debug, Default)]
+pub struct ManifestExtDelegationCertSpx {
+    pub header: ManifestExtHeader,
+    pub delegate_spx_key: SigverifySpxKey,
+    pub signature: SigverifySpxSignature,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,5 +365,40 @@ mod tests {
         assert_eq!(offset_of!(Manifest, entry_point), 900);
         assert_eq!(offset_of!(Manifest, extensions), 904);
         assert_eq!(size_of::<Manifest>(), CHIP_MANIFEST_SIZE as usize);
+    }
+
+    #[test]
+    pub fn test_delegation_cert_layout() {
+        assert_eq!(offset_of!(ManifestExtDelegationCert, header), 0);
+        assert_eq!(offset_of!(ManifestExtDelegationCert, version), 8);
+        assert_eq!(offset_of!(ManifestExtDelegationCert, owner_key_id), 12);
+        assert_eq!(offset_of!(ManifestExtDelegationCert, delegate_key_alg), 16);
+        assert_eq!(offset_of!(ManifestExtDelegationCert, delegate_public_key), 20);
+        assert_eq!(offset_of!(ManifestExtDelegationCert, padding), 84);
+        assert_eq!(offset_of!(ManifestExtDelegationCert, constraints), 88);
+        assert_eq!(offset_of!(ManifestExtDelegationCert, owner_signature), 248);
+        assert_eq!(size_of::<ManifestExtDelegationCert>(), 312);
+
+        // Verify constraints fields offset
+        assert_eq!(offset_of!(DelegationConstraints, min_security_version), 0);
+        assert_eq!(offset_of!(DelegationConstraints, max_security_version), 4);
+        assert_eq!(offset_of!(DelegationConstraints, allowed_slots), 8);
+        assert_eq!(offset_of!(DelegationConstraints, padding), 12);
+        assert_eq!(offset_of!(DelegationConstraints, expiration_epoch), 16);
+        assert_eq!(offset_of!(DelegationConstraints, usage_constraint), 24);
+        assert_eq!(offset_of!(DelegationConstraints, device_id), 28);
+        assert_eq!(offset_of!(DelegationConstraints, manuf_state_creator), 60);
+        assert_eq!(offset_of!(DelegationConstraints, manuf_state_owner), 64);
+        assert_eq!(offset_of!(DelegationConstraints, life_cycle_state), 68);
+        assert_eq!(offset_of!(DelegationConstraints, reserved), 72);
+        assert_eq!(size_of::<DelegationConstraints>(), 160);
+    }
+
+    #[test]
+    pub fn test_delegation_cert_spx_layout() {
+        assert_eq!(offset_of!(ManifestExtDelegationCertSpx, header), 0);
+        assert_eq!(offset_of!(ManifestExtDelegationCertSpx, delegate_spx_key), 8);
+        assert_eq!(offset_of!(ManifestExtDelegationCertSpx, signature), 40);
+        assert_eq!(size_of::<ManifestExtDelegationCertSpx>(), 7896);
     }
 }

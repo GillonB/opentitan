@@ -158,6 +158,12 @@ pub struct ManifestUpdateCommand {
     /// Sign the image when private keys are are given.
     #[arg(long, action = clap::ArgAction::Set, default_value = "true")]
     private_keys_sign: bool,
+    /// Filename for the owner's ECDSA private key to sign the delegation certificate.
+    #[arg(long)]
+    owner_ecdsa_key: Option<PathBuf>,
+    /// Filename for the owner's SPHINCS+ private key to sign the SPX delegation certificate.
+    #[arg(long)]
+    owner_spx_key: Option<PathBuf>,
 }
 
 fn load_rsa_key(key_file: &Path) -> Result<(RsaPublicKey, Option<RsaPrivateKey>)> {
@@ -295,12 +301,26 @@ impl CommandDispatch for ManifestUpdateCommand {
                 ManifestExtId::isfb.into(),
                 ManifestExtId::isfb_erase.into(),
                 ManifestExtId::image_type.into(),
+                ManifestExtId::delegation_cert.into(),
+                ManifestExtId::delegation_cert_spx.into(),
             ])
             .collect::<HashSet<u32>>();
         image.update_signed_region(&signed_ids)?;
 
         // Remove any unused extensions in the table that do not reference extension data.
         image.drop_null_extensions()?;
+
+        // Perform delegation certificate signing if owner keys are provided.
+        if let Some(owner_ecdsa_key_path) = &self.owner_ecdsa_key {
+            let (_, owner_priv) = load_ecdsa_key(owner_ecdsa_key_path)?;
+            if let Some(owner_priv_key) = owner_priv {
+                image.sign_delegation_certificate(&owner_priv_key)?;
+            }
+        }
+        if let Some(owner_spx_key_path) = &self.owner_spx_key {
+            let owner_spx_priv = SpxSecretKey::read_pem_file(owner_spx_key_path)?;
+            image.sign_delegation_certificate_spx(&owner_spx_priv)?;
+        }
 
         // This private_keys_sign gaurd is intended to sign the image
         // There are cases in which we need to not always sign the image
@@ -312,7 +332,9 @@ impl CommandDispatch for ManifestUpdateCommand {
             }
             // Sign with ECDSA.
             if let Some(key) = ecdsa_private_key {
-                image.update_ecdsa_signature(key.sign(&image.compute_digest()?)?)?;
+                let digest = image.compute_digest()?;
+                eprintln!("host ecdsa sign digest: {}", digest);
+                image.update_ecdsa_signature(key.sign(&digest)?)?;
             }
             // Sign with SPX+.
             if let Some(key) = spx_private_key {
@@ -392,11 +414,11 @@ impl CommandDispatch for ManifestVerifyCommand {
     ) -> Result<Option<Box<dyn erased_serde::Serialize>>> {
         let image = image::Image::read_from_file(&self.image)?;
         let digest = image.compute_digest()?;
-
         // Verify signature.
         let sigverify_params = image
             .get_sigverify_params_from_manifest()?
             .with_hash_reversal_bug(self.spx_hash_reversal_bug);
+
         sigverify_params.verify(&digest)?;
 
         if self.spx {
@@ -484,6 +506,7 @@ pub enum ManifestCommand {
 }
 
 #[derive(Debug, Subcommand, CommandDispatch)]
+#[allow(clippy::large_enum_variant)]
 /// Image manipulation commands.
 pub enum Image {
     Assemble(AssembleCommand),
