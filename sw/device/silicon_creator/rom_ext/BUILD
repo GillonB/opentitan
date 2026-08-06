@@ -154,6 +154,18 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "rom_ext_verify_unittest",
+    srcs = ["rom_ext_verify_unittest.cc"],
+    deps = [
+        ":rom_ext_verify",
+        "//sw/device/silicon_creator/lib/sigverify:flash_exec",
+        "//sw/device/silicon_creator/lib/sigverify:spx_verify",
+        "//sw/device/silicon_creator/testing:rom_test",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "rom_ext_flash_exc_handler",
     srcs = ["//sw/device/silicon_creator/lib:flash_exc_handler"],
