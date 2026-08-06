@@ -41,6 +41,8 @@ typedef struct owner_config {
   owner_sram_exec_mode_t sram_exec;
   /** Allow boot_svc after wakeup. */
   hardened_bool_t boot_svc_after_wakeup;
+  /** Disable direct boot. */
+  hardened_bool_t disable_direct_boot;
   /** The requested NVM configuration. */
   const owner_nvm_config_t *nvm;
   /** The requested NVM INFO configuration. */

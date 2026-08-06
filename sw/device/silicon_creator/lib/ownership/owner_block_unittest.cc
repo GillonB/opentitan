@@ -375,6 +375,30 @@ TEST_F(OwnerBlockTest, ParseBlock) {
   EXPECT_EQ(config.isfb->header.tag, kTlvTagIntegrationSpecificFirmwareBinding);
   EXPECT_EQ(keyring.length, 1);
   EXPECT_EQ(keyring.key[0]->header.tag, kTlvTagApplicationKey);
+  EXPECT_EQ(config.disable_direct_boot, 0);
+}
+
+TEST_F(OwnerBlockTest, ParseBlockDisableDirectBoot) {
+  BinaryBlob<owner_block_t> block(basic_owner, sizeof(basic_owner));
+  owner_config_t config;
+  owner_application_keyring_t keyring{};
+
+  EXPECT_CALL(flash_ctrl_, DataDefaultCfgGet)
+      .WillRepeatedly(Return(default_config));
+
+  // Test True
+  block.Reset().Seek(offsetof(owner_block_t, reserved)).Write(static_cast<uint32_t>(kHardenedBoolTrue));
+  rom_error_t error = owner_block_parse(
+      block.get(), /*check_only=*/kHardenedBoolFalse, &config, &keyring);
+  EXPECT_EQ(error, kErrorOk);
+  EXPECT_EQ(config.disable_direct_boot, kHardenedBoolTrue);
+
+  // Test False
+  block.Reset().Seek(offsetof(owner_block_t, reserved)).Write(static_cast<uint32_t>(kHardenedBoolFalse));
+  error = owner_block_parse(
+      block.get(), /*check_only=*/kHardenedBoolFalse, &config, &keyring);
+  EXPECT_EQ(error, kErrorOk);
+  EXPECT_EQ(config.disable_direct_boot, kHardenedBoolFalse);
 }
 
 TEST_F(OwnerBlockTest, ParseBlockBadHeaderLength) {
