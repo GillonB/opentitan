@@ -98,10 +98,14 @@ impl CommandDispatch for ManifestShowCommand {
         let result = image
             .subimages()?
             .iter()
-            .map(|s| ManifestShowResult {
-                kind: s.kind,
-                offset: s.offset,
-                manifest: s.manifest.try_into().expect("manifest conversion"),
+            .map(|s| {
+                let mut manifest_spec: ManifestSpec = s.manifest.try_into().expect("manifest conversion");
+                manifest_spec.extension_params = s.extract_extension_params().unwrap_or_default();
+                ManifestShowResult {
+                    kind: s.kind,
+                    offset: s.offset,
+                    manifest: manifest_spec,
+                }
             })
             .collect::<Vec<_>>();
         Ok(Some(Box::new(result)))

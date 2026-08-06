@@ -6,7 +6,7 @@ use anyhow::Result;
 use serde::{self, Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use zerocopy::IntoBytes;
+use zerocopy::{FromBytes, IntoBytes};
 
 use crate::chip::boolean::HardenedBool;
 use crate::crypto::ecdsa::{EcdsaPublicKey, EcdsaRawPublicKey, EcdsaRawSignature};
@@ -14,12 +14,48 @@ use crate::image::manifest::*;
 use crate::image::manifest_def::le_bytes_to_word_arr;
 use crate::util::num_de::HexEncoded;
 use crate::with_unknown;
-use sphincsplus::{DecodeKey, SpxPublicKey};
+use sphincsplus::{DecodeKey, SpxPublicKey, SphincsPlus};
 
 #[derive(Debug, Error)]
 pub enum ManifestExtError {
     #[error("Extension ID 0x{0:x} has duplicate extension data.")]
     DuplicateEntry(u32),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathOrRaw<T> {
+    Path(PathBuf),
+    Raw(T),
+}
+
+impl<T: Serialize> Serialize for PathOrRaw<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            PathOrRaw::Path(path) => path.serialize(serializer),
+            PathOrRaw::Raw(raw) => raw.serialize(serializer),
+        }
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for PathOrRaw<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Helper<T> {
+            Path(PathBuf),
+            Raw(T),
+        }
+        match Helper::deserialize(deserializer)? {
+            Helper::Path(path) => Ok(PathOrRaw::Path(path)),
+            Helper::Raw(raw) => Ok(PathOrRaw::Raw(raw)),
+        }
+    }
 }
 
 with_unknown! {
@@ -90,7 +126,7 @@ pub enum ManifestExtEntrySpec {
         version: u32,
         owner_key_id: u32,
         delegate_key_alg: u32,
-        delegate_public_key: PathBuf,
+        delegate_public_key: PathOrRaw<EcdsaRawPublicKey>,
         min_security_version: u32,
         max_security_version: u32,
         allowed_slots: u32,
@@ -100,13 +136,13 @@ pub enum ManifestExtEntrySpec {
         manuf_state_creator: u32,
         manuf_state_owner: u32,
         life_cycle_state: u32,
-        owner_signature: Option<PathBuf>,
+        owner_signature: Option<PathOrRaw<EcdsaRawSignature>>,
     },
 
     #[serde(alias = "delegation_cert_spx")]
     DelegationCertSpx {
-        delegate_spx_key: PathBuf,
-        signature: Option<PathBuf>,
+        delegate_spx_key: PathOrRaw<Vec<u8>>,
+        signature: Option<PathOrRaw<Vec<u8>>>,
     },
 
     #[serde(alias = "raw")]
@@ -390,17 +426,23 @@ impl ManifestExtEntry {
                 life_cycle_state,
                 owner_signature,
             } => {
-                let delegate_pub = EcdsaPublicKey::load(delegate_public_key)?;
-                let raw_delegate_pub = EcdsaRawPublicKey::try_from(&delegate_pub)?;
-                let raw_owner_sig = owner_signature
-                    .as_deref()
-                    .map(EcdsaRawSignature::read_from_file)
-                    .transpose()?;
+                let delegate_pub = match delegate_public_key {
+                    PathOrRaw::Path(path) => {
+                        let key = EcdsaPublicKey::load(path)?;
+                        EcdsaRawPublicKey::try_from(&key)?
+                    }
+                    PathOrRaw::Raw(raw) => raw.clone(),
+                };
+                let raw_owner_sig = match owner_signature {
+                    Some(PathOrRaw::Path(path)) => Some(EcdsaRawSignature::read_from_file(path)?),
+                    Some(PathOrRaw::Raw(raw)) => Some(raw.clone()),
+                    None => None,
+                };
                 ManifestExtEntry::new_delegation_cert_entry(
                     *version,
                     *owner_key_id,
                     *delegate_key_alg,
-                    &raw_delegate_pub,
+                    &delegate_pub,
                     *min_security_version,
                     *max_security_version,
                     *allowed_slots,
@@ -417,11 +459,15 @@ impl ManifestExtEntry {
                 delegate_spx_key,
                 signature,
             } => {
-                let delegate_spx = SpxPublicKey::read_pem_file(delegate_spx_key)?;
-                let sig_bytes = signature
-                    .as_ref()
-                    .map(std::fs::read)
-                    .transpose()?;
+                let delegate_spx = match delegate_spx_key {
+                    PathOrRaw::Path(path) => SpxPublicKey::read_pem_file(path)?,
+                    PathOrRaw::Raw(raw) => SpxPublicKey::from_bytes(SphincsPlus::Sha2128sSimple, raw.as_slice())?,
+                };
+                let sig_bytes = match signature {
+                    Some(PathOrRaw::Path(path)) => Some(std::fs::read(path)?),
+                    Some(PathOrRaw::Raw(raw)) => Some(raw.clone()),
+                    None => None,
+                };
                 ManifestExtEntry::new_delegation_cert_spx_entry(
                     &delegate_spx,
                     sig_bytes.as_deref(),
@@ -473,7 +519,155 @@ impl ManifestExtEntry {
             }
         }
     }
+
+    /// Parses a manifest extension entry from its identifier and raw byte representation.
+    pub fn parse(identifier: u32, bytes: &[u8]) -> Result<Self> {
+        match identifier {
+            MANIFEST_EXT_ID_SPX_KEY => {
+                let ext = ManifestExtSpxKey::read_from_bytes(bytes)
+                    .map_err(|_| anyhow::anyhow!("Failed to parse SpxKey extension"))?;
+                Ok(ManifestExtEntry::SpxKey(ext))
+            }
+            MANIFEST_EXT_ID_SPX_SIGNATURE => {
+                let ext = ManifestExtSpxSignature::read_from_bytes(bytes)
+                    .map_err(|_| anyhow::anyhow!("Failed to parse SpxSignature extension"))?;
+                Ok(ManifestExtEntry::SpxSignature(Box::new(ext)))
+            }
+            MANIFEST_EXT_ID_IMAGE_TYPE => {
+                let ext = ManifestExtImageType::read_from_bytes(bytes)
+                    .map_err(|_| anyhow::anyhow!("Failed to parse ImageType extension"))?;
+                Ok(ManifestExtEntry::ImageType(ext))
+            }
+            MANIFEST_EXT_ID_SECVER_WRITE => {
+                let ext = ManifestExtSecVerWrite::read_from_bytes(bytes)
+                    .map_err(|_| anyhow::anyhow!("Failed to parse SecVerWrite extension"))?;
+                Ok(ManifestExtEntry::SecVerWrite(ext))
+            }
+            MANIFEST_EXT_ID_ISFB_ERASE => {
+                let ext = ManifestExtIsfbErasePolicy::read_from_bytes(bytes)
+                    .map_err(|_| anyhow::anyhow!("Failed to parse IsfbErasePolicy extension"))?;
+                Ok(ManifestExtEntry::IsfbErasePolicy(ext))
+            }
+            MANIFEST_EXT_ID_DELEGATION_CERT => {
+                let ext = ManifestExtDelegationCert::read_from_bytes(bytes)
+                    .map_err(|_| anyhow::anyhow!("Failed to parse DelegationCert extension"))?;
+                Ok(ManifestExtEntry::DelegationCert(Box::new(ext)))
+            }
+            MANIFEST_EXT_ID_DELEGATION_CERT_SPX => {
+                let ext = ManifestExtDelegationCertSpx::read_from_bytes(bytes)
+                    .map_err(|_| anyhow::anyhow!("Failed to parse DelegationCertSpx extension"))?;
+                Ok(ManifestExtEntry::DelegationCertSpx(Box::new(ext)))
+            }
+            MANIFEST_EXT_ID_ISFB => {
+                use byteorder::{LittleEndian, ReadBytesExt};
+                let mut cursor = std::io::Cursor::new(bytes);
+                let header = ManifestExtHeader::read_from_bytes(&bytes[0..8])
+                    .map_err(|_| anyhow::anyhow!("Failed to parse Isfb header"))?;
+                cursor.set_position(8);
+                let strike_mask = cursor.read_u128::<LittleEndian>()?;
+                let count = cursor.read_u32::<LittleEndian>()? as usize;
+                let mut product_expr = Vec::new();
+                for _ in 0..count {
+                    let mask = cursor.read_u32::<LittleEndian>()?;
+                    let value = cursor.read_u32::<LittleEndian>()?;
+                    product_expr.push(ManifestExtIsfbProductExpr { mask, value });
+                }
+                Ok(ManifestExtEntry::Isfb(ManifestExtIsfb {
+                    header,
+                    strike_mask,
+                    product_expr_count: count as u32,
+                    product_expr,
+                }))
+            }
+            _ => {
+                // If it is a raw / unknown extension, parse it as raw
+                if bytes.len() >= std::mem::size_of::<ManifestExtHeader>() {
+                    let header = ManifestExtHeader::read_from_bytes(&bytes[0..std::mem::size_of::<ManifestExtHeader>()])
+                        .map_err(|_| anyhow::anyhow!("Failed to parse Raw extension header"))?;
+                    let data = bytes[std::mem::size_of::<ManifestExtHeader>()..].to_vec();
+                    Ok(ManifestExtEntry::Raw { header, data })
+                } else {
+                    anyhow::bail!("Extension data is too small to contain header");
+                }
+            }
+        }
+    }
+}impl TryFrom<&ManifestExtEntry> for ManifestExtEntrySpec {
+    type Error = anyhow::Error;
+
+    fn try_from(entry: &ManifestExtEntry) -> Result<Self> {
+        match entry {
+            ManifestExtEntry::SpxKey(_) => Ok(ManifestExtEntrySpec::SpxKey {
+                spx_key: PathBuf::from("spx.pub.pem"),
+            }),
+            ManifestExtEntry::SpxSignature(_) => Ok(ManifestExtEntrySpec::SpxSignature {
+                spx_signature: PathBuf::from("spx.sig"),
+            }),
+            ManifestExtEntry::ImageType(ext) => Ok(ManifestExtEntrySpec::ImageType {
+                image_type: ext.image_type,
+            }),
+            ManifestExtEntry::SecVerWrite(ext) => Ok(ManifestExtEntrySpec::SecVerWrite {
+                secver_write: ext.write != 0,
+            }),
+            ManifestExtEntry::IsfbErasePolicy(ext) => Ok(ManifestExtEntrySpec::IsfbErasePolicy {
+                erase_allowed: ext.erase_allowed != 0,
+            }),
+            ManifestExtEntry::Isfb(isfb) => {
+                let product_expr = isfb.product_expr
+                    .iter()
+                    .map(|pe| ProductExpr {
+                        mask: HexEncoded(pe.mask),
+                        value: HexEncoded(pe.value),
+                    })
+                    .collect::<Vec<_>>();
+                Ok(ManifestExtEntrySpec::Isfb {
+                    strike_mask: HexEncoded(isfb.strike_mask),
+                    product_expr,
+                })
+            }
+            ManifestExtEntry::DelegationCert(cert) => {
+                let constraints = &cert.constraints;
+                Ok(ManifestExtEntrySpec::DelegationCert {
+                    version: cert.version,
+                    owner_key_id: cert.owner_key_id,
+                    delegate_key_alg: cert.delegate_key_alg,
+                    delegate_public_key: PathOrRaw::Raw(EcdsaRawPublicKey {
+                        x: cert.delegate_public_key.x.iter().flat_map(|w| w.to_le_bytes()).collect(),
+                        y: cert.delegate_public_key.y.iter().flat_map(|w| w.to_le_bytes()).collect(),
+                    }),
+                    min_security_version: constraints.min_security_version,
+                    max_security_version: constraints.max_security_version,
+                    allowed_slots: constraints.allowed_slots,
+                    expiration_epoch: constraints.expiration_epoch,
+                    usage_constraint: constraints.usage_constraint,
+                    device_id: constraints.device_id.device_id,
+                    manuf_state_creator: constraints.manuf_state_creator,
+                    manuf_state_owner: constraints.manuf_state_owner,
+                    life_cycle_state: constraints.life_cycle_state,
+                    owner_signature: Some(PathOrRaw::Raw(EcdsaRawSignature {
+                        r: cert.owner_signature.r.iter().flat_map(|w| w.to_le_bytes()).collect(),
+                        s: cert.owner_signature.s.iter().flat_map(|w| w.to_le_bytes()).collect(),
+                    })),
+                })
+            }
+            ManifestExtEntry::DelegationCertSpx(cert) => {
+                Ok(ManifestExtEntrySpec::DelegationCertSpx {
+                    delegate_spx_key: PathOrRaw::Raw(cert.delegate_spx_key.as_bytes().to_vec()),
+                    signature: Some(PathOrRaw::Raw(cert.signature.as_bytes().to_vec())),
+                })
+            }
+            ManifestExtEntry::Raw { header, data } => {
+                Ok(ManifestExtEntrySpec::Raw {
+                    name: HexEncoded(header.name),
+                    identifier: HexEncoded(header.identifier),
+                    value: data.iter().map(|&b| HexEncoded(b)).collect(),
+                    signed: false,
+                })
+            }
+        }
+    }
 }
+
 
 #[cfg(test)]
 mod tests {

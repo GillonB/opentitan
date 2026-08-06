@@ -158,6 +158,27 @@ pub struct SubImage<'a> {
     pub data: &'a [u8],
 }
 
+impl<'a> SubImage<'a> {
+    /// Extracts the extension parameters specified in the manifest from the image data.
+    pub fn extract_extension_params(&self) -> Result<Vec<ManifestExtEntrySpec>> {
+        let mut params = Vec::new();
+        for entry in self.manifest.extensions.entries.iter() {
+            if entry.identifier == 0 || entry.offset == 0 {
+                continue;
+            }
+            let offset = entry.offset as usize;
+            if offset >= self.data.len() {
+                bail!("Extension offset is out of subimage bounds");
+            }
+            let ext_bytes = &self.data[offset..];
+            let parsed_entry = ManifestExtEntry::parse(entry.identifier, ext_bytes)?;
+            let spec = ManifestExtEntrySpec::try_from(&parsed_entry)?;
+            params.push(spec);
+        }
+        Ok(params)
+    }
+}
+
 #[derive(Debug)]
 pub enum ImageChunk {
     Concat(PathBuf),
