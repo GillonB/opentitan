@@ -361,3 +361,66 @@ opentitan_test(
         "//sw/device/silicon_creator/lib/drivers:retention_sram",
     ],
 )
+
+manifest(d = {
+    "name": "delegation_manifest",
+    "security_version": "0x1",
+    "delegate_public_key": "//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa_p256.pub.der",
+    "address_translation": hex(CONST.HARDENED_FALSE),
+    "identifier": hex(CONST.OWNER),
+    "visibility": ["//visibility:public"],
+    "extensions": [
+        "",
+        "",
+        "secver_write",
+        "isfb",
+        "isfb_erase",
+        "delegation_cert",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ],
+    "delegation_cert": json.encode({
+        "version": 1,
+        "owner_key_id": 0x265b676b,
+        "delegate_key_alg": 0x36353250,
+        "delegate_public_key": "sw/device/silicon_creator/lib/ownership/keys/fake/app_prod_ecdsa_p256.pub.der",
+        "min_security_version": 1,
+        "max_security_version": 10,
+        "allowed_slots": 3,
+        "expiration_epoch": 12345678,
+        "usage_constraint": 0,
+        "device_id": [1, 2, 3, 4, 5, 6, 7, 8],
+        "manuf_state_creator": 0,
+        "manuf_state_owner": 0,
+        "life_cycle_state": 4294967295,
+        "owner_signature": None
+    }),
+})
+
+opentitan_test(
+    name = "delegation_boot_test",
+    srcs = [":boot_test"],
+    ecdsa_key = {"//sw/device/silicon_creator/lib/ownership/keys/fake:ecdsa_keyset": "app_prod_0"},
+    exec_env = {
+        "//hw/top_earlgrey:fpga_cw340_rom_ext": None,
+    },
+    fpga = fpga_params(),
+    manifest = ":delegation_manifest",
+    data = [
+        "//sw/device/silicon_creator/lib/ownership/keys/fake:app_prod_ecdsa_p256.pub.der",
+    ],
+    deps = [
+        "//sw/device/lib/base:status",
+        "//sw/device/lib/testing/test_framework:ottf_main",
+        "//sw/device/silicon_creator/lib:boot_log",
+        "//sw/device/silicon_creator/lib/drivers:retention_sram",
+    ],
+)
+

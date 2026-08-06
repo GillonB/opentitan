@@ -4,6 +4,14 @@
 
 load("//rules:const.bzl", "CONST", "hex")
 
+ManifestInfo = provider(
+    doc = "Manifest information and dependencies",
+    fields = {
+        "manifest": "The manifest JSON file",
+        "keys": "Depset of public/private key files referenced by the manifest",
+    },
+)
+
 _SEL_DEVICE_ID = 1
 _SEL_MANUF_STATE_CREATOR = (1 << 8)
 _SEL_MANUF_STATE_OWNER = (1 << 9)
@@ -209,12 +217,32 @@ def _manifest_impl(ctx):
             },
         )
 
+    if ctx.attr.delegation_cert:
+        mf["extension_params"].append(
+            {
+                "delegation_cert": json.decode(ctx.attr.delegation_cert),
+            },
+        )
+
+    if ctx.attr.delegation_cert_spx:
+        mf["extension_params"].append(
+            {
+                "delegation_cert_spx": json.decode(ctx.attr.delegation_cert_spx),
+            },
+        )
+
     file = ctx.actions.declare_file("{}.json".format(ctx.attr.name))
     ctx.actions.write(file, json.encode_indent(mf))
-    return DefaultInfo(
-        files = depset([file]),
-        data_runfiles = ctx.runfiles(files = [file]),
-    )
+    return [
+        DefaultInfo(
+            files = depset([file]),
+            data_runfiles = ctx.runfiles(files = [file]),
+        ),
+        ManifestInfo(
+            manifest = file,
+            keys = depset([ctx.file.delegate_public_key] if ctx.file.delegate_public_key else []),
+        ),
+    ]
 
 _manifest = rule(
     implementation = _manifest_impl,
@@ -246,6 +274,9 @@ _manifest = rule(
         "integrator_specific_firmware_binding": attr.string(doc = "Create an Integrator Specific Firmware Block (ISFB) JSON object"),
         "isfb_erase_allowed_policy": attr.string(doc = "Create an ISFB Erase Allowed Policy JSON object"),
         "secver_write": attr.string(default = "none", values = ["none", "false", "true"], doc = "Add the secver_write extension with the specified value"),
+        "delegation_cert": attr.string(doc = "Add the delegation_cert extension with the specified JSON value"),
+        "delegation_cert_spx": attr.string(doc = "Add the delegation_cert_spx extension with the specified JSON value"),
+        "delegate_public_key": attr.label(allow_single_file = True, doc = "Delegate public key file"),
     },
 )
 
