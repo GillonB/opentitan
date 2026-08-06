@@ -415,6 +415,18 @@ enum {
    */
   kManifestExtIdIsfbErase = 0x45465349,
   /**
+   * ASCII "DGLC".
+   *
+   * Delegation certificate extension.
+   */
+  kManifestExtIdDelegationCert = 0x43474c44,
+  /**
+   * ASCII "DGLS".
+   *
+   * Delegation certificate SPX extension.
+   */
+  kManifestExtIdDelegationCertSpx = 0x53474c44,
+  /**
    * ASCII "EXT0.
    */
   kManifestExtNameSpxKey = 0x30545845,
@@ -550,6 +562,54 @@ typedef struct manifest_ext_isfb_erase {
 } manifest_ext_isfb_erase_t;
 
 /**
+ * Manifest extension: Delegation certificate.
+ */
+typedef struct manifest_ext_delegation_cert {
+  manifest_ext_header_t header;
+  uint32_t version;
+  uint32_t owner_key_id;
+  uint32_t delegate_key_alg;
+  ecdsa_p256_public_key_t delegate_public_key;
+  struct {
+    uint32_t min_security_version;
+    uint32_t max_security_version;
+    uint32_t allowed_slots;
+    uint64_t expiration_epoch;
+    uint32_t usage_constraint;
+    lifecycle_device_id_t device_id;
+    uint32_t manuf_state_creator;
+    uint32_t manuf_state_owner;
+    uint32_t life_cycle_state;
+    uint32_t reserved[22];
+  } constraints;
+  ecdsa_p256_signature_t owner_signature;
+} manifest_ext_delegation_cert_t;
+
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_t, header, 0);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_t, version, 8);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_t, owner_key_id, 12);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_t, delegate_key_alg, 16);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_t, delegate_public_key, 20);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_t, constraints, 88);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_t, owner_signature, 248);
+OT_ASSERT_SIZE(manifest_ext_delegation_cert_t, 312);
+
+/**
+ * Manifest extension: Delegation certificate SPX.
+ */
+typedef struct manifest_ext_delegation_cert_spx {
+  manifest_ext_header_t header;
+  sigverify_spx_key_t delegate_spx_key;
+  sigverify_spx_signature_t signature;
+} manifest_ext_delegation_cert_spx_t;
+
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_spx_t, header, 0);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_spx_t, delegate_spx_key, 8);
+OT_ASSERT_MEMBER_OFFSET(manifest_ext_delegation_cert_spx_t, signature, 40);
+OT_ASSERT_SIZE(manifest_ext_delegation_cert_spx_t, 7896);
+
+
+/**
  * Table of manifest extensions.
  *
  * Columns: Table index, type name, extenstion name, identifier, signed or not.
@@ -560,7 +620,9 @@ typedef struct manifest_ext_isfb_erase {
   X(1, manifest_ext_spx_signature_t, spx_signature, kManifestExtIdSpxSignature, false) \
   X(2, manifest_ext_secver_write_t,  secver_write,  kManifestExtIdSecVerWrite,  true)  \
   X(3, manifest_ext_isfb_t,          isfb,          kManifestExtIdIsfb,         true)  \
-  X(4, manifest_ext_isfb_erase_t,    isfb_erase,    kManifestExtIdIsfbErase,    true)
+  X(4, manifest_ext_isfb_erase_t,    isfb_erase,    kManifestExtIdIsfbErase,    true)  \
+  X(5, manifest_ext_delegation_cert_t,     delegation_cert,     kManifestExtIdDelegationCert,     true ) \
+  X(6, manifest_ext_delegation_cert_spx_t, delegation_cert_spx, kManifestExtIdDelegationCertSpx,  true )
 // clang-format on
 
 #if defined(OT_PLATFORM_RV32) || defined(MANIFEST_UNIT_TEST_)
@@ -718,10 +780,19 @@ rom_error_t manifest_ext_get_spx_key(const manifest_t *manifest,
 rom_error_t manifest_ext_get_spx_signature(
     const manifest_t *manifest,
     const manifest_ext_spx_signature_t **spx_signature);
+rom_error_t manifest_ext_get_secver_write(
+    const manifest_t *manifest,
+    const manifest_ext_secver_write_t **secver_write);
 rom_error_t manifest_ext_get_isfb(const manifest_t *manifest,
                                   const manifest_ext_isfb_t **isfb);
 rom_error_t manifest_ext_get_isfb_erase(
     const manifest_t *manifest, const manifest_ext_isfb_erase_t **isfb_erase);
+rom_error_t manifest_ext_get_delegation_cert(
+    const manifest_t *manifest,
+    const manifest_ext_delegation_cert_t **delegation_cert);
+rom_error_t manifest_ext_get_delegation_cert_spx(
+    const manifest_t *manifest,
+    const manifest_ext_delegation_cert_spx_t **delegation_cert_spx);
 
 #endif  // defined(OT_PLATFORM_RV32) || defined(MANIFEST_UNIT_TEST_)
 

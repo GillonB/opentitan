@@ -48,3 +48,9 @@ extern rom_error_t manifest_ext_get_isfb_erase(
 extern rom_error_t manifest_ext_get_secver_write(
     const manifest_t *manifest,
     const manifest_ext_secver_write_t **secver_write);
+extern rom_error_t manifest_ext_get_delegation_cert(
+    const manifest_t *manifest,
+    const manifest_ext_delegation_cert_t **delegation_cert);
+extern rom_error_t manifest_ext_get_delegation_cert_spx(
+    const manifest_t *manifest,
+    const manifest_ext_delegation_cert_spx_t **delegation_cert_spx);
