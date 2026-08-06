@@ -193,20 +193,36 @@ opentitan_test(
     ],
 )
 
-cc_library(
+dual_cc_library(
     name = "spx_verify",
-    srcs = ["spx_verify.c"],
-    hdrs = ["spx_verify.h"],
-    deps = [
-        ":spx_key",
-        "//hw/top:otp_ctrl_c_regs",
-        "//hw/top/dt",
-        "//sw/device/lib/base:hardened",
-        "//sw/device/silicon_creator/lib/drivers:hmac",
-        "//sw/device/silicon_creator/lib/drivers:lifecycle",
-        "//sw/device/silicon_creator/lib/drivers:otp",
-        "//sw/device/silicon_creator/lib/sigverify/sphincsplus:verify",
-    ],
+    srcs = dual_inputs(
+        device = ["spx_verify.c"],
+        host = ["mock_spx_verify.cc"],
+    ),
+    hdrs = dual_inputs(
+        host = ["mock_spx_verify.h"],
+        shared = ["spx_verify.h"],
+    ),
+    deps = dual_inputs(
+        device = [
+            ":spx_key",
+            "//hw/top:otp_ctrl_c_regs",
+            "//hw/top/dt",
+            "//sw/device/lib/base:hardened",
+            "//sw/device/silicon_creator/lib/drivers:hmac",
+            "//sw/device/silicon_creator/lib/drivers:lifecycle",
+            "//sw/device/silicon_creator/lib/drivers:otp",
+            "//sw/device/silicon_creator/lib/sigverify/sphincsplus:verify",
+        ],
+        host = [
+            ":spx_key",
+            "//sw/device/lib/base:hardened",
+            "//sw/device/silicon_creator/lib/drivers:hmac",
+            "//sw/device/silicon_creator/lib/drivers:lifecycle",
+            "//sw/device/silicon_creator/testing:rom_test",
+            "@googletest//:gtest",
+        ],
+    ),
 )
 
 opentitan_test(
