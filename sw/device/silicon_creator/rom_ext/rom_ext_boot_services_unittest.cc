@@ -38,6 +38,17 @@ constexpr uint32_t kUnlock =
     static_cast<uint32_t>(kBootSvcOwnershipUnlockReqType);
 
 class RomExtBootServicesTest : public rom_test::RomTest {
+ public:
+  RomExtBootServicesTest() {
+    seq_.reset();
+    EXPECT_CALL(mock_manifest_, DelegationCert)
+        .Times(AnyNumber())
+        .WillRepeatedly(Return(kErrorManifestBadExtension));
+    EXPECT_CALL(mock_manifest_, DelegationCertSpx)
+        .Times(AnyNumber())
+        .WillRepeatedly(Return(kErrorManifestBadExtension));
+    seq_ = std::make_unique<testing::InSequence>();
+  }
  protected:
   boot_svc_msg_t boot_svc_msg{};
   boot_data_t boot_data{};

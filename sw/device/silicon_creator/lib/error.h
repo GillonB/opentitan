@@ -251,12 +251,12 @@ enum module_ {
   X(kErrorOwnershipINFOVersion,       ERROR_(0x73, kModuleOwnership, kInvalidArgument)), \
   X(kErrorOwnershipRESQVersion,       ERROR_(0x74, kModuleOwnership, kInvalidArgument)), \
   X(kErrorOwnershipISFBVersion,       ERROR_(0x75, kModuleOwnership, kInvalidArgument)), \
-  X(kErrorOwnershipInvalidVersion,    ERROR_(0x80, kModuleOwnership, kInvalidArgument)), \
-  X(kErrorOwnershipInvalidSlot,       ERROR_(0x81, kModuleOwnership, kInvalidArgument)), \
-  X(kErrorOwnershipInvalidDeviceId,   ERROR_(0x82, kModuleOwnership, kInvalidArgument)), \
-  X(kErrorOwnershipInvalidCreatorManufState, ERROR_(0x83, kModuleOwnership, kInvalidArgument)), \
-  X(kErrorOwnershipInvalidOwnerManufState,   ERROR_(0x84, kModuleOwnership, kInvalidArgument)), \
-  X(kErrorOwnershipInvalidLifecycle,  ERROR_(0x85, kModuleOwnership, kInvalidArgument)), \
+  X(kErrorOwnershipInvalidVersion,    ERROR_(21, kModuleOwnership, kInvalidArgument)), \
+  X(kErrorOwnershipInvalidSlot,       ERROR_(22, kModuleOwnership, kInvalidArgument)), \
+  X(kErrorOwnershipInvalidDeviceId,   ERROR_(23, kModuleOwnership, kInvalidArgument)), \
+  X(kErrorOwnershipInvalidCreatorManufState, ERROR_(24, kModuleOwnership, kInvalidArgument)), \
+  X(kErrorOwnershipInvalidOwnerManufState,   ERROR_(25, kModuleOwnership, kInvalidArgument)), \
+  X(kErrorOwnershipInvalidLifecycle,  ERROR_(26, kModuleOwnership, kInvalidArgument)), \
   \
   X(kErrorPersoTlvInternal,           ERROR_(0, kModulePersoTlv, kInternal)), \
   X(kErrorPersoTlvCertObjNotFound,    ERROR_(1, kModulePersoTlv, kNotFound)), \
