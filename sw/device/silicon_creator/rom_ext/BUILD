@@ -198,6 +198,8 @@ cc_library(
         "//sw/device/silicon_creator/lib/ownership:owner_block",
         "//sw/device/silicon_creator/lib/ownership:owner_verify",
         "//sw/device/silicon_creator/lib/sigverify:usage_constraints",
+        "//sw/device/silicon_creator/lib/sigverify:spx_verify",
+        "//sw/device/silicon_creator/lib/sigverify:flash_exec",
     ],
 )
 

@@ -39,5 +39,17 @@ rom_error_t manifest_ext_get_isfb(const manifest_t *manifest,
   return MockManifest::Instance().Isfb(manifest, isfb);
 }
 
+rom_error_t manifest_ext_get_delegation_cert(
+    const manifest_t *manifest,
+    const manifest_ext_delegation_cert_t **delegation_cert) {
+  return MockManifest::Instance().DelegationCert(manifest, delegation_cert);
+}
+
+rom_error_t manifest_ext_get_delegation_cert_spx(
+    const manifest_t *manifest,
+    const manifest_ext_delegation_cert_spx_t **delegation_cert_spx) {
+  return MockManifest::Instance().DelegationCertSpx(manifest, delegation_cert_spx);
+}
+
 }  // extern "C"
 }  // namespace rom_test
