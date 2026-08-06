@@ -16,6 +16,8 @@
 #include "sw/device/silicon_creator/lib/ownership/owner_block.h"
 #include "sw/device/silicon_creator/lib/ownership/owner_verify.h"
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
+#include "sw/device/lib/base/bitfield.h"
+#include "sw/device/silicon_creator/lib/drivers/lifecycle.h"
 #include "sw/device/silicon_creator/lib/sigverify/usage_constraints.h"
 #include "sw/device/silicon_creator/rom_ext/rom_ext_boot_policy.h"
 
@@ -107,5 +109,94 @@ rom_error_t rom_ext_verify(const manifest_t *manifest, char slot_id,
   // `flash_exec` and `isfb_check_count`. This is also the reason why don't use
   // `HARDENED_RETURN_IF_ERROR` in the `owner_verify` and `isfb_boot_request`
   // calls.
+  return kErrorOk;
+}
+
+static uint32_t lifecycle_state_to_mask(lifecycle_state_t state) {
+  switch (state) {
+    case kLcStateTest:
+      return 1u << 0;
+    case kLcStateDev:
+      return 1u << 1;
+    case kLcStateProd:
+      return 1u << 2;
+    case kLcStateProdEnd:
+      return 1u << 3;
+    case kLcStateRma:
+      return 1u << 4;
+    default:
+      return 0; // Invalid/unknown state
+  }
+}
+
+rom_error_t check_delegation_constraints(const manifest_t *manifest,
+                                         const manifest_ext_delegation_cert_t *cert,
+                                         char slot_id) {
+  // Hardened check against security version downgrades
+  if (launder32(manifest->security_version) < cert->constraints.min_security_version) {
+    return kErrorOwnershipInvalidVersion;
+  }
+  HARDENED_CHECK_GE(manifest->security_version, cert->constraints.min_security_version);
+
+  // Hardened check against malicious version inflation
+  if (launder32(manifest->security_version) > cert->constraints.max_security_version) {
+    return kErrorOwnershipInvalidVersion;
+  }
+  HARDENED_CHECK_LE(manifest->security_version, cert->constraints.max_security_version);
+
+  // Hardened check for allowed_slots
+  uint32_t current_slot;
+  if (slot_id == 'A') {
+    current_slot = 0;
+  } else if (slot_id == 'B') {
+    current_slot = 1;
+  } else {
+    return kErrorOwnershipInvalidSlot;
+  }
+  uint32_t slot_mask = 1u << current_slot;
+  if (launder32(cert->constraints.allowed_slots & slot_mask) == 0) {
+    return kErrorOwnershipInvalidSlot;
+  }
+  HARDENED_CHECK_NE(cert->constraints.allowed_slots & slot_mask, 0);
+
+  // Retrieve current hardware constraints
+  manifest_usage_constraints_t hw_constraints;
+  sigverify_usage_constraints_get(cert->constraints.usage_constraint & 0x7FF, &hw_constraints);
+
+  // Hardened check for device ID
+  for (size_t i = 0; i < kLifecycleDeviceIdNumWords; ++i) {
+    if (bitfield_bit32_read(cert->constraints.usage_constraint, i)) {
+      if (launder32(hw_constraints.device_id.device_id[i]) != cert->constraints.device_id.device_id[i]) {
+        return kErrorOwnershipInvalidDeviceId;
+      }
+      HARDENED_CHECK_EQ(hw_constraints.device_id.device_id[i], cert->constraints.device_id.device_id[i]);
+    }
+  }
+
+  // Hardened check for manuf_state_creator
+  if (bitfield_bit32_read(cert->constraints.usage_constraint, kManifestSelectorBitManufStateCreator)) {
+    if (launder32(hw_constraints.manuf_state_creator) != cert->constraints.manuf_state_creator) {
+      return kErrorOwnershipInvalidCreatorManufState;
+    }
+    HARDENED_CHECK_EQ(hw_constraints.manuf_state_creator, cert->constraints.manuf_state_creator);
+  }
+
+  // Hardened check for manuf_state_owner
+  if (bitfield_bit32_read(cert->constraints.usage_constraint, kManifestSelectorBitManufStateOwner)) {
+    if (launder32(hw_constraints.manuf_state_owner) != cert->constraints.manuf_state_owner) {
+      return kErrorOwnershipInvalidOwnerManufState;
+    }
+    HARDENED_CHECK_EQ(hw_constraints.manuf_state_owner, cert->constraints.manuf_state_owner);
+  }
+
+  // Hardened check for lifecycle state
+  if (bitfield_bit32_read(cert->constraints.usage_constraint, kManifestSelectorBitLifeCycleState)) {
+    uint32_t current_lc_mask = lifecycle_state_to_mask(lifecycle_state_get());
+    if (launder32(cert->constraints.life_cycle_state & current_lc_mask) == 0) {
+      return kErrorOwnershipInvalidLifecycle;
+    }
+    HARDENED_CHECK_NE(cert->constraints.life_cycle_state & current_lc_mask, 0);
+  }
+
   return kErrorOk;
 }

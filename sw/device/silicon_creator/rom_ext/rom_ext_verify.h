@@ -37,6 +37,19 @@ rom_error_t rom_ext_verify(const manifest_t *manifest, char slot_id,
                            size_t *verify_key, owner_config_t *owner_config,
                            uint32_t *isfb_check_count);
 
+/**
+ * Check constraints specified in a delegation certificate.
+ *
+ * @param manifest Pointer to the manifest being examined.
+ * @param cert Pointer to the delegation certificate.
+ * @param slot_id The slot ID ('A' or 'B').
+ * @return kErrorOk or a constraint validation error.
+ */
+OT_WARN_UNUSED_RESULT
+rom_error_t check_delegation_constraints(const manifest_t *manifest,
+                                         const manifest_ext_delegation_cert_t *cert,
+                                         char slot_id);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus
