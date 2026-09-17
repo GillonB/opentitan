@@ -284,6 +284,48 @@ TEST(FipsKatTableDataTest, GetEcdhDataSuccess) {
   EXPECT_EQ(ecdh_data->data[0], 0x71);
 }
 
+TEST(FipsKatTableDataTest, GetDataMldsa87) {
+  struct Layout {
+    struct {
+      uint32_t magic;
+      uint32_t version;
+      uint32_t entry_count;
+      uint32_t total_size;
+      fips_kat_entry_t entries[1];
+    } table;
+    mldsa_kat_data_t mldsa;
+  } layout{};
+
+  layout.table.magic = kFipsKatDescriptorMagic;
+  layout.table.version = kFipsKatDescriptorVersion1;
+  layout.table.entry_count = 1;
+  layout.table.total_size = sizeof(layout);
+
+  layout.table.entries[0].algorithm_id = kFipsKatAlgMldsa87;
+  layout.table.entries[0].offset = offsetof(Layout, mldsa);
+  layout.table.entries[0].size = sizeof(layout.mldsa);
+
+  layout.mldsa.num_cases = 5;
+  layout.mldsa.cases[0].seed[0] = 0x0D;
+  layout.mldsa.cases[0].mprime[0] = 0x3A;
+  layout.mldsa.cases[0].expected_sig_hash[0] = 0x50;
+
+  const auto* table =
+      reinterpret_cast<const fips_kat_descriptor_table_t*>(&layout.table);
+  const fips_kat_entry_t* entry = find_fips_entry(table, kFipsKatAlgMldsa87);
+  ASSERT_NE(entry, nullptr);
+
+  const void* data = get_fips_data(table, entry);
+  ASSERT_NE(data, nullptr);
+  EXPECT_EQ(data, reinterpret_cast<const void*>(&layout.mldsa));
+
+  const auto* mldsa_data = static_cast<const mldsa_kat_data_t*>(data);
+  EXPECT_EQ(mldsa_data->num_cases, 5);
+  EXPECT_EQ(mldsa_data->cases[0].seed[0], 0x0D);
+  EXPECT_EQ(mldsa_data->cases[0].mprime[0], 0x3A);
+  EXPECT_EQ(mldsa_data->cases[0].expected_sig_hash[0], 0x50);
+}
+
 TEST(FipsKatTableBoundsCheckTest, RejectOutOfBounds) {
   TestTableLayout layout{};
   layout.table.magic = kFipsKatDescriptorMagic;
