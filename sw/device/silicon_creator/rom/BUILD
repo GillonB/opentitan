@@ -81,6 +81,16 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "fips_kat_table_unittest",
+    srcs = ["fips_kat_table_unittest.cc"],
+    deps = [
+        ":fips_kat_table",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 ld_library(
     name = "linker_script",
     script = "rom.ld",
@@ -120,10 +130,24 @@ cc_library(
 )
 
 cc_library(
+    name = "fips_kat_table",
+    hdrs = ["fips_kat_table.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//hw/top:top_lib",
+    ],
+)
+
+cc_library(
     name = "mask_rom_lib",
-    srcs = ["rom_start.S"],
+    srcs = [
+        "fips_kat_ptrs.c",
+        "rom_start.S",
+    ],
+    hdrs = ["fips_kat_table.h"],
     target_compatible_with = [OPENTITAN_CPU],
     deps = [
+        ":fips_kat_table",
         ":rom_common",
         ":rom_epmp",
         "//hw/top:aon_timer_c_regs",
