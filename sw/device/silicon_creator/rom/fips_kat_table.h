@@ -78,6 +78,9 @@ typedef enum fips_kat_alg_id {
   // DRBG & Entropy (Future)
   kFipsKatAlgDrbgAes256 = 26,
   kFipsKatAlgEntropySrcSha3Conditioning = 27,
+
+  // Authenticated Encryption (AES-GCM)
+  kFipsKatAlgAesGcm256Encrypt = 28,
 } fips_kat_alg_id_t;
 
 /**
