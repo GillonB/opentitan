@@ -1177,6 +1177,38 @@ typedef struct fips_kat_mldsa87 {
 } fips_kat_mldsa87_t;
 
 /**
+ * Concrete test vector structure for CTR_DRBG AES-256 (Algorithm ID 26).
+ *
+ * Schema: `drbg_kat_data_t` equivalent.
+ *
+ * How this vector was obtained:
+ * - Authoritative Reference: NIST SP 800-90A Rev 1 / CAVP CTR_DRBG AES-256 (no derivation function).
+ * - Entropy Input: 48 bytes (384 bits: 256-bit entropy + 128-bit nonce).
+ * - Personalization String: None (empty).
+ * - Additional Input: None (empty).
+ * - Expected Output: 64 bytes (512 bits: 16 words returned on 2nd generate call).
+ *
+ * Layout:
+ * - Header: entropy_input_len (4B) + expected_output_len (4B) = 8 bytes.
+ * - Data array: 48B (entropy input) + 64B (expected output) = 112 bytes.
+ * - Total ROM Footprint: 8 + 112 = 120 bytes (`120 % 4 == 0`). Naturally 4-byte aligned.
+ *
+ * How test runners (BL0 / Cryptolib) use this vector:
+ * 1. Read entry offset from `fips_kat_descriptor_table_t` for `kFipsKatAlgDrbgAes256`.
+ * 2. Dereference as `const drbg_kat_data_t *kat = get_fips_data(table, entry)`.
+ * 3. Verify `kat->entropy_input_len == 48` and `kat->expected_output_len == 64`.
+ * 4. Instantiate with `otcrypto_drbg_manual_instantiate(&entropy, &empty_perso)`.
+ * 5. Call `otcrypto_drbg_manual_generate()` twice (as required by NIST SP 800-90A).
+ * 6. Compare second generate output with `kat->data + kat->entropy_input_len`.
+ * 7. Call `otcrypto_drbg_uninstantiate()`.
+ */
+typedef struct fips_kat_drbg_aes256 {
+  uint32_t entropy_input_len;
+  uint32_t expected_output_len;
+  uint8_t data[112];
+} fips_kat_drbg_aes256_t;
+
+/**
  * Container holding all embedded FIPS KAT vector payloads in `.fips_kat.data`.
  */
 typedef struct fips_kat_data_store {
@@ -1204,6 +1236,7 @@ typedef struct fips_kat_data_store {
   fips_kat_ecdh_p384_t ecdh_p384;
   fips_kat_x25519_t x25519;
   fips_kat_mldsa87_t mldsa87;
+  fips_kat_drbg_aes256_t drbg_aes256;
 } fips_kat_data_store_t;
 
 /**
@@ -2261,6 +2294,28 @@ static const fips_kat_data_store_t kFipsKatDataStore = {
             },
         },
     },
+    .drbg_aes256 = {
+        .entropy_input_len = 48,
+        .expected_output_len = 64,
+        .data = {
+            // Entropy Input (48 bytes: 32-byte entropy + 16-byte nonce)
+            0x10, 0xc0, 0xbe, 0x73, 0x4c, 0x47, 0x62, 0x92,
+            0x76, 0x0f, 0xa3, 0x16, 0xde, 0x51, 0x1b, 0x53,
+            0xe5, 0x94, 0xe4, 0x2e, 0xb3, 0x9d, 0xec, 0xdf,
+            0x9d, 0x87, 0x7a, 0xcb, 0x9c, 0x41, 0x00, 0x56,
+            0xb0, 0xb0, 0x79, 0xca, 0x5c, 0x3b, 0xa3, 0xdd,
+            0x9e, 0x64, 0x68, 0xa4, 0xfa, 0x73, 0x5d, 0xdf,
+            // Expected Output (64 bytes: 16 words from 2nd generate call)
+            0xd9, 0x7c, 0xc0, 0xd1, 0xf1, 0xa7, 0xf8, 0x5a,
+            0x4c, 0xc8, 0x12, 0x10, 0xcb, 0xb8, 0x8b, 0xe4,
+            0x99, 0x9e, 0x18, 0x87, 0xb1, 0xcc, 0x0f, 0xd4,
+            0x9b, 0x61, 0x1c, 0x77, 0x22, 0xab, 0x82, 0xdf,
+            0x2f, 0xdc, 0xb1, 0x80, 0x91, 0xf3, 0x81, 0x25,
+            0x0c, 0xac, 0xf7, 0x64, 0xb3, 0x94, 0x04, 0x51,
+            0xb7, 0x41, 0x3c, 0xa4, 0x4c, 0x51, 0x17, 0xdb,
+            0xae, 0x07, 0xb1, 0x87, 0xc5, 0x01, 0x3e, 0x79,
+        },
+    },
 };
 
 /**
@@ -2272,22 +2327,22 @@ static const fips_kat_data_store_t kFipsKatDataStore = {
    offsetof(fips_kat_data_store_t, field))
 
 /**
- * Concrete descriptor table in Mask ROM holding 24 entries.
+ * Concrete descriptor table in Mask ROM holding 25 entries.
  */
 typedef struct fips_kat_rom_table {
-  enum { kFipsKatNumEntries = 24 };
+  enum { kFipsKatNumEntries = 25 };
   uint32_t magic;
   uint32_t version;
   uint32_t entry_count;
   uint32_t total_size;
-  fips_kat_entry_t entries[24];
+  fips_kat_entry_t entries[25];
 } fips_kat_rom_table_t;
 
 __attribute__((section(".fips_kat.table"), used, aligned(4)))
 static const fips_kat_rom_table_t kFipsKatDescriptorTable = {
     .magic = kFipsKatDescriptorMagic,
     .version = kFipsKatDescriptorVersion1,
-    .entry_count = 24,
+    .entry_count = 25,
     .total_size = sizeof(fips_kat_rom_table_t) + sizeof(fips_kat_data_store_t),
     .entries = {
         {
@@ -2409,6 +2464,11 @@ static const fips_kat_rom_table_t kFipsKatDescriptorTable = {
             .algorithm_id = (uint32_t)kFipsKatAlgAesGcm256Encrypt,
             .offset = FIPS_KAT_OFFSET(aes_gcm256),
             .size = sizeof(fips_kat_aes_gcm256_t),
+        },
+        {
+            .algorithm_id = (uint32_t)kFipsKatAlgDrbgAes256,
+            .offset = FIPS_KAT_OFFSET(drbg_aes256),
+            .size = sizeof(fips_kat_drbg_aes256_t),
         },
     },
 };
