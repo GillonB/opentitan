@@ -81,6 +81,9 @@ typedef enum fips_kat_alg_id {
 
   // Authenticated Encryption (AES-GCM)
   kFipsKatAlgAesGcm256Encrypt = 28,
+
+  // SPHINCS+ / SLH-DSA Post-Quantum Signatures
+  kFipsKatAlgSphincsPlusSha2_128sVerify = 29,
 } fips_kat_alg_id_t;
 
 /**

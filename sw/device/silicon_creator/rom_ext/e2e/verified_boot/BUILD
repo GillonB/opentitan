@@ -402,6 +402,7 @@ opentitan_test(
         "//sw/device/lib/crypto/impl:sha3",
         "//sw/device/silicon_creator/lib/drivers:hmac",
         "//sw/device/silicon_creator/lib/drivers:kmac",
+        "//sw/device/silicon_creator/lib/sigverify/sphincsplus:verify",
         "//sw/device/silicon_creator/rom:fips_kat_table",
     ],
 )
