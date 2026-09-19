@@ -158,13 +158,12 @@ typedef struct drbg_kat_data {
 
 // 6. Key Encapsulation (ML-KEM)
 typedef struct kem_kat_data {
-  uint32_t d_len;
-  uint32_t z_len;
-  uint32_t m_len;
-  uint32_t expected_pk_len;
-  uint32_t expected_ct_len;
-  uint32_t expected_ss_len;
-  uint8_t data[];  // d || z || m || expected_pk_hash || expected_ct_hash || expected_ss
+  uint32_t seed_d_len;
+  uint32_t seed_z_len;
+  uint32_t seed_m_len;
+  uint32_t exp_ct_hash_len;
+  uint32_t exp_ss_len;
+  uint8_t data[];  // seed_d || seed_z || seed_m || expected_ct_hash || expected_ss
 } kem_kat_data_t;
 
 // 7. Key Agreement (ECDH / X25519)

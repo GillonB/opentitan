@@ -397,6 +397,8 @@ opentitan_test(
         "//sw/device/lib/crypto/include:datatypes",
         "//sw/device/lib/crypto/impl:mldsa",
         "//sw/device/lib/crypto/impl/mldsa:mldsa",
+        "//sw/device/lib/crypto/impl:mlkem",
+        "//sw/device/lib/crypto/impl/mlkem",
         "//sw/device/lib/crypto/impl:rsa",
         "//sw/device/lib/crypto/impl:sha2",
         "//sw/device/lib/crypto/impl:sha3",
