@@ -7,6 +7,8 @@ load("@rules_pkg//pkg:mappings.bzl", "pkg_filegroup", "pkg_files")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(glob(["*.pem", "*.der"]))
+
 cc_library(
     name = "includes",
     testonly = True,

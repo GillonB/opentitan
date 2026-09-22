@@ -37,6 +37,10 @@ SLOTS = [
 USBDFU_RESCUE_TIMEOUT_SECS = 20
 
 TEST_OWNER_CONFIGS = {
+    "disable_direct_boot": {
+        "owner_defines": ["TEST_OWNER_DISABLE_DIRECT_BOOT=kHardenedBoolTrue"],
+        "rescue_module": ["//sw/device/silicon_creator/lib/rescue:rescue_xmodem"],
+    },
     "boot_svc_after_wakeup": {
         "owner_defines": ["TEST_OWNER_BOOT_SVC_AFTER_WAKEUP=kHardenedBoolTrue"],
         "rescue_module": ["//sw/device/silicon_creator/lib/rescue:rescue_xmodem"],
