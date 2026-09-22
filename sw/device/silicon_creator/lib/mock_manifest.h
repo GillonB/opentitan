@@ -17,6 +17,7 @@ namespace internal {
  */
 class MockManifest : public global_mock::GlobalMock<MockManifest> {
  public:
+  bool use_delegation_certs = false;
   MOCK_METHOD(rom_error_t, Check, (const manifest_t *));
   MOCK_METHOD(manifest_digest_region_t, DigestRegion, (const manifest_t *));
   MOCK_METHOD(epmp_region_t, CodeRegion, (const manifest_t *));
@@ -28,6 +29,16 @@ class MockManifest : public global_mock::GlobalMock<MockManifest> {
                const manifest_ext_spx_signature_t **spx_signature));
   MOCK_METHOD(rom_error_t, Isfb,
               (const manifest_t *, const manifest_ext_isfb_t **isfb));
+  MOCK_METHOD(rom_error_t, DelegationCerts,
+              (const manifest_t *, size_t,
+               const manifest_ext_delegation_cert_t **,
+               const manifest_ext_delegation_cert_spx_t **, size_t *));
+  MOCK_METHOD(rom_error_t, DelegationCert,
+              (const manifest_t *,
+               const manifest_ext_delegation_cert_t **delegation_cert));
+  MOCK_METHOD(rom_error_t, DelegationCertSpx,
+              (const manifest_t *,
+               const manifest_ext_delegation_cert_spx_t **delegation_cert_spx));
 };
 
 }  // namespace internal
