@@ -255,7 +255,7 @@ impl TryFrom<&EcdsaRawPublicKey> for EcdsaPublicKey {
     }
 }
 
-#[derive(Debug, Deserialize, Annotate, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Annotate, PartialEq)]
 pub struct EcdsaRawPublicKey {
     #[serde(with = "serde_bytes")]
     #[annotate(format = hexstr)]
