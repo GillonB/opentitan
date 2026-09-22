@@ -121,6 +121,9 @@ rom_error_t owner_verify(uint32_t key_alg, const owner_keydata_t *key,
   // Start an ECDSA verify on OTBN (if requested by the key_alg).
   if (category == kOwnershipKeyAlgCategoryEcdsa ||
       category == kOwnershipKeyAlgCategoryHybrid) {
+    if (ecdsa_sig == NULL) {
+      return kErrorSigverifyBadEcdsaSignature;
+    }
     HARDENED_RETURN_IF_ERROR(sigverify_ecdsa_p256_start(
         ecdsa_sig,
         category == kOwnershipKeyAlgCategoryHybrid ? &key->hybrid.ecdsa
