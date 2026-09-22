@@ -199,6 +199,8 @@ void owner_config_default(owner_config_t *config) {
   config->isfb = (const owner_isfb_config_t *)kHardenedBoolFalse;
   config->sram_exec = kOwnerSramExecModeDisabledLocked;
   config->boot_svc_after_wakeup = kHardenedBoolFalse;
+  config->disable_direct_boot = kHardenedBoolFalse;
+  config->max_delegation_depth = 2;
 }
 
 rom_error_t owner_block_parse(const owner_block_t *block,
@@ -216,6 +218,9 @@ rom_error_t owner_block_parse(const owner_block_t *block,
     owner_config_default(config);
     config->sram_exec = block->sram_exec_mode;
     config->boot_svc_after_wakeup = block->boot_svc_after_wakeup;
+    config->disable_direct_boot = (hardened_bool_t)block->reserved[0];
+    config->max_delegation_depth =
+        block->reserved[1] != 0 ? block->reserved[1] : 2;
   }
 
   uint32_t remain = sizeof(block->data);

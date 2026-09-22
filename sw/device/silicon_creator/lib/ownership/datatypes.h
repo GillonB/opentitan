@@ -183,7 +183,10 @@ typedef struct owner_block {
   uint32_t device_id[8];
   /** Perform ROM_EXT boot services after wakeup (hardened_bool_t). */
   uint32_t boot_svc_after_wakeup;
-  /** Reserved space for future use. */
+  /** Reserved space for future use.
+   *
+   * reserved[0] is used for disable_direct_boot (hardened_bool_t).
+   */
   uint32_t reserved[15];
   /** Owner public key. */
   owner_keydata_t owner_key;
