@@ -106,7 +106,8 @@ static void wait_for_done(void) {
   uint32_t reg = 0;
   do {
     reg = abs_mmio_read32(hmac_base() + HMAC_INTR_STATE_REG_OFFSET);
-  } while (!bitfield_bit32_read(reg, HMAC_INTR_STATE_HMAC_DONE_BIT));
+  } while (!bitfield_bit32_read(launder32(reg), HMAC_INTR_STATE_HMAC_DONE_BIT));
+  HARDENED_CHECK_EQ(bitfield_bit32_read(reg, HMAC_INTR_STATE_HMAC_DONE_BIT), true);
   abs_mmio_write32(hmac_base() + HMAC_INTR_STATE_REG_OFFSET, reg);
 }
 
@@ -131,9 +132,11 @@ void hmac_sha256_final_truncated(uint32_t *digest, size_t len) {
   // called with a `len` that is too big, but this helps ensure it at runtime
   // just in case.
   len = len <= kHmacDigestNumWords ? len : kHmacDigestNumWords;
-  for (uint32_t i = 0; i < len; ++i, result += incr) {
+  size_t i = 0;
+  for (; launder32(i) < len; ++i, result += incr) {
     digest[i] = abs_mmio_read32(hmac_base() + result);
   }
+  HARDENED_CHECK_EQ(i, len);
 }
 
 void hmac_sha256(const void *data, size_t len, hmac_digest_t *digest) {
@@ -164,9 +167,15 @@ void hmac_sha384_final(hmac_digest_sha384_t *digest) {
     incr = (uint32_t)-sizeof(uint32_t);
   }
 
-  for (size_t i = 0; i < kHmacDigestSha384NumWords; ++i, result += incr) {
+  size_t i = 0;
+  for (; launder32(i) < kHmacDigestSha384NumWords; ++i, result += incr) {
     digest->digest[i] = abs_mmio_read32(hmac_base() + result);
   }
+  HARDENED_CHECK_EQ(i, kHmacDigestSha384NumWords);
+}
+
+void hmac_wipe(uint32_t entropy) {
+  abs_mmio_write32(hmac_base() + HMAC_WIPE_SECRET_REG_OFFSET, entropy);
 }
 
 void hmac_sha384(const void *data, size_t len, hmac_digest_sha384_t *digest) {

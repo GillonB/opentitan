@@ -230,5 +230,13 @@ TEST_F(Sha384Test, SendData) {
   EXPECT_THAT(act_digest.digest, ElementsAreArray(kExpectedDigest));
 }
 
+class WipeTest : public HmacTest {};
+
+TEST_F(WipeTest, Wipe) {
+  uint32_t kEntropy = 0x5a5a5a5a;
+  EXPECT_ABS_WRITE32(base_ + HMAC_WIPE_SECRET_REG_OFFSET, kEntropy);
+  hmac_wipe(kEntropy);
+}
+
 }  // namespace
 }  // namespace hmac_unittest

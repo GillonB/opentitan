@@ -57,5 +57,7 @@ void hmac_sha384_final(hmac_digest_sha384_t *digest) {
 void hmac_sha384(const void *data, size_t len, hmac_digest_sha384_t *digest) {
   MockHmac::Instance().sha384(data, len, digest);
 }
+
+void hmac_wipe(uint32_t entropy) { MockHmac::Instance().wipe(entropy); }
 }  // extern "C"
 }  // namespace rom_test

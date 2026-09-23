@@ -253,6 +253,13 @@ void hmac_sha256_save(hmac_context_t *ctx);
  */
 void hmac_sha256_restore(const hmac_context_t *ctx);
 
+/**
+ * Wipe the HMAC block internal secret registers using the provided entropy.
+ *
+ * @param entropy 32-bit random or pseudo-random entropy value.
+ */
+void hmac_wipe(uint32_t entropy);
+
 #ifdef __cplusplus
 }
 #endif

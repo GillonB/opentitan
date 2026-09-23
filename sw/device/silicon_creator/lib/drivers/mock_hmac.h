@@ -32,6 +32,7 @@ class MockHmac : public global_mock::GlobalMock<MockHmac> {
   MOCK_METHOD(void, sha384_init, ());
   MOCK_METHOD(void, sha384_final, (hmac_digest_sha384_t *));
   MOCK_METHOD(void, sha384, (const void *, size_t, hmac_digest_sha384_t *));
+  MOCK_METHOD(void, wipe, (uint32_t));
 };
 
 }  // namespace internal
