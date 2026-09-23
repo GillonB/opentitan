@@ -5,8 +5,10 @@
 #include "sw/device/silicon_creator/lib/ownership/owner_verify.h"
 
 #include "sw/device/silicon_creator/lib/base/util.h"
+#include "sw/device/silicon_creator/lib/drivers/otbn.h"
 #include "sw/device/silicon_creator/lib/error.h"
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
+#include "sw/device/silicon_creator/lib/sigverify/mldsa_verify.h"
 #include "sw/device/silicon_creator/lib/sigverify/sigverify.h"
 #include "sw/device/silicon_creator/lib/sigverify/sphincsplus/verify.h"
 
@@ -160,3 +162,51 @@ rom_error_t owner_verify(uint32_t key_alg, const owner_keydata_t *key,
   // Both values should be kErrorOk.  Mix them and return the result.
   return (rom_error_t)((spx + ecdsa) >> 1);
 }
+
+rom_error_t owner_verify_hybrid_mldsa(
+    const owner_keydata_t *key,
+    const ecdsa_p256_signature_t *ecdsa_sig,
+    const sigverify_mldsa87_public_key_t *mldsa_key,
+    const sigverify_mldsa87_signature_t *mldsa_sig,
+    const hmac_digest_t *ecdsa_digest,
+    const hmac_digest_sha384_t *mldsa_digest,
+    uint32_t *flash_exec) {
+  if (ecdsa_sig == NULL || mldsa_key == NULL || mldsa_sig == NULL) {
+    return kErrorSigverifyBadKey;
+  }
+
+  // Phase 1: OTBN execution of ECDSA P-256 verification
+  uint32_t ec_flash_exec = 0;
+  HARDENED_RETURN_IF_ERROR(sigverify_ecdsa_p256_start(
+      ecdsa_sig, &key->hybrid_mldsa.ecdsa, ecdsa_digest));
+  HARDENED_RETURN_IF_ERROR(
+      sigverify_ecdsa_p256_finish(ecdsa_sig, &ec_flash_exec));
+
+  // Intermediate zeroization: OTBN secure wipe between algorithm handoffs
+  HARDENED_RETURN_IF_ERROR(sc_otbn_dmem_sec_wipe());
+
+  // Phase 2: Key Pinning Verification
+  // Check the ML-DSA-87 public key against the pinned digest in the keyring.
+  hmac_digest_t pk_digest;
+  hmac_sha256(mldsa_key->data, kSigverifyMldsa87PublicKeyBytes, &pk_digest);
+  uint32_t key_mismatch = 0;
+  for (size_t i = 0; launder32(i) < ARRAYSIZE(pk_digest.digest); ++i) {
+    key_mismatch |= pk_digest.digest[i] ^ key->hybrid_mldsa.mldsa_digest[i];
+  }
+  if (launder32(key_mismatch) != 0) {
+    return kErrorSigverifyBadMldsaKey;
+  }
+  HARDENED_CHECK_EQ(key_mismatch, 0);
+
+  // Phase 3: OTBN execution of ML-DSA-87 verification
+  uint32_t mldsa_flash_exec = 0;
+  HARDENED_RETURN_IF_ERROR(
+      mldsa_verify(mldsa_key, mldsa_sig, mldsa_digest, &mldsa_flash_exec));
+
+  // Dual secret sharing token reduction
+  if (flash_exec) {
+    *flash_exec = ec_flash_exec ^ mldsa_flash_exec;
+  }
+  return kErrorOk;
+}
+

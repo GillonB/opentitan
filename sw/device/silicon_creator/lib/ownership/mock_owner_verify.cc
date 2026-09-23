@@ -19,5 +19,18 @@ rom_error_t owner_verify(uint32_t key_alg, const owner_keydata_t *key,
       msg_prefix_2, msg_prefix_2_len, msg, msg_len, digest, flash_exec);
 }
 
+rom_error_t owner_verify_hybrid_mldsa(
+    const owner_keydata_t *key,
+    const ecdsa_p256_signature_t *ecdsa_sig,
+    const sigverify_mldsa87_public_key_t *mldsa_key,
+    const sigverify_mldsa87_signature_t *mldsa_sig,
+    const hmac_digest_t *ecdsa_digest,
+    const hmac_digest_sha384_t *mldsa_digest,
+    uint32_t *flash_exec) {
+  return MockOwnerVerify::Instance().verify_hybrid_mldsa(
+      key, ecdsa_sig, mldsa_key, mldsa_sig, ecdsa_digest, mldsa_digest,
+      flash_exec);
+}
+
 }  // extern "C"
 }  // namespace rom_test

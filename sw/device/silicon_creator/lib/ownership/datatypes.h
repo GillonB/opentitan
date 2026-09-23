@@ -22,9 +22,15 @@ typedef struct hybrid_key {
   sigverify_spx_key_t spx;
 } hybrid_key_t;
 
+typedef struct hybrid_mldsa_key {
+  ecdsa_p256_public_key_t ecdsa;
+  uint32_t mldsa_digest[8];
+} hybrid_mldsa_key_t;
+
 /**
- * An owner_key can be either a ECDSA P256 or SPX+ key.  The type of the key
- * material will be determined by a separate field on the owner block
+ * An owner_key can be either a ECDSA P256, SPX+, ML-DSA-87, or Hybrid key.
+ * The type of the key material will be determined by a separate field on
+ * the owner block.
  */
 typedef union owner_key_data {
   /** ECDSA P256 public key */
@@ -33,11 +39,16 @@ typedef union owner_key_data {
   sigverify_spx_key_t spx;
   /** Hybrid ECDSA & SPHINCS+ public key */
   hybrid_key_t hybrid;
+  /** Hybrid ECDSA & ML-DSA-87 pinned key */
+  hybrid_mldsa_key_t hybrid_mldsa;
+  /** Pinned ML-DSA-87 digest */
+  uint32_t mldsa_digest[12];
   /** Enough space to hold an ECDSA key and a SPX+ key for hybrid schemes */
   uint32_t raw[16 + 8];
   /** A key ID is the first 32-bit word of the key data */
   uint32_t id;
 } owner_keydata_t;
+OT_ASSERT_SIZE(owner_keydata_t, 96);
 
 /**
  * An owner_signature is an ECDSA P256 signature.
@@ -83,6 +94,13 @@ typedef enum ownership_key_alg {
   // Key algorithm Hybrid P256 & SPX+ Prehashed SHA256: `HqS2`
   kOwnershipKeyAlgHybridSq20Prehash = 0x32537148,
 
+  /** Key algorithm ML-DSA-87 Pure: `SMPu` */
+  kOwnershipKeyAlgMldsa87Pure = 0x75504d53,
+  /** Key algorithm ML-DSA-87 Prehashed SHA384: `SMS2` */
+  kOwnershipKeyAlgMldsa87Prehash = 0x32534d53,
+  /** Key algorithm Hybrid P256 & ML-DSA-87: `HMS2` */
+  kOwnershipKeyAlgHybridMldsa87 = 0x32534d48,
+
   /** Key algorithm category mask */
   kOwnershipKeyAlgCategoryMask = 0xFF,
   /** Key algorithm category for ECDSA: `P...` */
@@ -91,6 +109,8 @@ typedef enum ownership_key_alg {
   kOwnershipKeyAlgCategorySpx = 0x53,
   /** Key algorithm category for Hybrid: `H...` */
   kOwnershipKeyAlgCategoryHybrid = 0x48,
+  /** Key algorithm category for ML-DSA: `M...` */
+  kOwnershipKeyAlgCategoryMldsa = 0x4d,
 } ownership_key_alg_t;
 
 typedef enum ownership_update_mode {

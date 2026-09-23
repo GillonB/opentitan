@@ -11,6 +11,7 @@ load(
 load(
     "//rules/opentitan:defs.bzl",
     "EARLGREY_TEST_ENVS",
+    "OPENTITAN_CPU",
     "fpga_params",
     "opentitan_test",
     "qemu_params",
@@ -222,6 +223,50 @@ opentitan_test(
     ),
     deps = [
         ":spx_verify",
+        "//sw/device/lib/testing/test_framework:ottf_main",
+    ],
+)
+
+cc_library(
+    name = "mldsa_key",
+    srcs = ["mldsa_key.c"],
+    hdrs = ["mldsa_key.h"],
+    deps = [
+        "//sw/device/lib/base:macros",
+    ],
+)
+
+cc_library(
+    name = "mldsa_verify",
+    srcs = ["mldsa_verify.c"],
+    hdrs = ["mldsa_verify.h"],
+    target_compatible_with = [OPENTITAN_CPU],
+    deps = [
+        ":mldsa_key",
+        "//sw/device/lib/base:hardened",
+        "//sw/device/lib/base:hardened_memory",
+        "//sw/device/lib/base:macros",
+        "//sw/device/silicon_creator/lib:error",
+        "//sw/device/silicon_creator/lib/drivers:hmac",
+        "//sw/device/silicon_creator/lib/drivers:kmac",
+        "//sw/device/silicon_creator/lib/drivers:lifecycle",
+        "//sw/device/silicon_creator/lib/drivers:otbn",
+        "//sw/otbn/crypto/mldsa87/verify:mldsa87_verify",
+    ],
+)
+
+opentitan_test(
+    name = "mldsa_verify_functest",
+    srcs = ["mldsa_verify_functest.c"],
+    exec_env = dicts.add(
+        EARLGREY_TEST_ENVS,
+        {
+            "//hw/top_earlgrey:fpga_cw340_test_rom": None,
+        },
+    ),
+    deps = [
+        ":mldsa_verify",
+        "//sw/device/lib/base:hardened",
         "//sw/device/lib/testing/test_framework:ottf_main",
     ],
 )

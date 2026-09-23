@@ -105,6 +105,9 @@ enum module_ {
   X(kErrorSigverifyBadSpxConfig,      ERROR_(10, kModuleSigverify, kInvalidArgument)), \
   X(kErrorSigverifyEcdsaNotFound,     ERROR_(11, kModuleSigverify, kNotFound)), \
   X(kErrorSigverifySpxNotFound,       ERROR_(12, kModuleSigverify, kNotFound)), \
+  X(kErrorSigverifyBadMldsaSignature, ERROR_(13, kModuleSigverify, kInvalidArgument)), \
+  X(kErrorSigverifyBadMldsaKey,       ERROR_(14, kModuleSigverify, kInvalidArgument)), \
+  X(kErrorSigverifyMldsaNotFound,     ERROR_(15, kModuleSigverify, kNotFound)), \
   \
   X(kErrorKeymgrInternal,             ERROR_(1, kModuleKeymgr, kInternal)), \
   \

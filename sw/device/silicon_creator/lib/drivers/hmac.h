@@ -30,6 +30,14 @@ enum {
    * Size of a HMAC-SHA-256 key in 32-bit words.
    */
   kHmacKeyNumWords = kHmacDigestNumWords,
+  /**
+   * Size of a SHA-384 digest in bytes.
+   */
+  kHmacDigestSha384NumBytes = 48,
+  /**
+   * Size of a SHA-384 digest in 32-bit words.
+   */
+  kHmacDigestSha384NumWords = kHmacDigestSha384NumBytes / sizeof(uint32_t),
 };
 
 /**
@@ -38,6 +46,13 @@ enum {
 typedef struct hmac_digest {
   uint32_t digest[kHmacDigestNumWords];
 } hmac_digest_t;
+
+/**
+ * A typed representation of the SHA-384 digest.
+ */
+typedef struct hmac_digest_sha384 {
+  uint32_t digest[kHmacDigestSha384NumWords];
+} hmac_digest_sha384_t;
 
 /**
  * A typed representation of the HMAC secret key (for HMAC-SHA256 mode).
@@ -98,6 +113,14 @@ void sc_hmac_hmac_sha256(const void *data, size_t len, hmac_key_t key,
 void hmac_sha256_configure(bool big_endian_digest);
 
 /**
+ * Configure the HMAC block in SHA384 mode.
+ *
+ * @param big_endian Whether or not to initialize the peripheral for big-endian
+ *                   results.
+ */
+void hmac_sha384_configure(bool big_endian_digest);
+
+/**
  * Starts a new operation on the pre-configured HMAC block.
  *
  * Call `hmac_sha256_configure` first.
@@ -115,6 +138,7 @@ inline void hmac_sha256_init(void) {
 #else
 void hmac_sha256_init(void);
 #endif
+void hmac_sha384_init(void);
 
 /**
  * Configures and starts HMAC in HMAC mode with little-endian output.
@@ -180,6 +204,7 @@ inline void hmac_sha256_final(hmac_digest_t *digest) {
 #else
 void hmac_sha256_final(hmac_digest_t *digest);
 #endif
+void hmac_sha384_final(hmac_digest_sha384_t *digest);
 
 /**
  * Convenience single-shot function for computing the SHA-256 digest of a
@@ -190,6 +215,16 @@ void hmac_sha256_final(hmac_digest_t *digest);
  * @param[out] digest Buffer to copy digest to.
  */
 void hmac_sha256(const void *data, size_t len, hmac_digest_t *digest);
+
+/**
+ * Convenience single-shot function for computing the SHA-384 digest of a
+ * contiguous buffer.
+ *
+ * @param data Buffer to copy data from.
+ * @param len Size of the `data` buffer in bytes.
+ * @param[out] digest Buffer to copy digest to.
+ */
+void hmac_sha384(const void *data, size_t len, hmac_digest_sha384_t *digest);
 
 /**
  * Save an operation's working state for later.

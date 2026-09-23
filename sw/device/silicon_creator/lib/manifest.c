@@ -48,3 +48,9 @@ extern rom_error_t manifest_ext_get_isfb_erase(
 extern rom_error_t manifest_ext_get_secver_write(
     const manifest_t *manifest,
     const manifest_ext_secver_write_t **secver_write);
+extern rom_error_t manifest_ext_get_mldsa_key(
+    const manifest_t *manifest, const manifest_ext_mldsa_key_t **mldsa_key);
+extern rom_error_t manifest_ext_get_mldsa_signature(
+    const manifest_t *manifest,
+    const manifest_ext_mldsa_signature_t **mldsa_signature);
+

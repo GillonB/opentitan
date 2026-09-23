@@ -9,6 +9,7 @@
 #include "sw/device/silicon_creator/lib/error.h"
 #include "sw/device/silicon_creator/lib/ownership/datatypes.h"
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
+#include "sw/device/silicon_creator/lib/sigverify/mldsa_key.h"
 #include "sw/device/silicon_creator/lib/sigverify/spx_key.h"
 
 /**
@@ -35,5 +36,26 @@ rom_error_t owner_verify(uint32_t key_alg, const owner_keydata_t *key,
                          const void *msg_prefix_2, size_t msg_prefix_2_len,
                          const void *msg, size_t msg_len,
                          const hmac_digest_t *digest, uint32_t *flash_exec);
+
+/**
+ * Verify data using a hybrid ECDSA P256 and ML-DSA-87 key.
+ *
+ * @param key Pinned hybrid key from keyring.
+ * @param ecdsa_sig ECDSA signature from manifest.
+ * @param mldsa_key ML-DSA public key from manifest extension.
+ * @param mldsa_sig ML-DSA signature from manifest extension.
+ * @param ecdsa_digest SHA-256 digest over usage constraints and image.
+ * @param mldsa_digest SHA-384 digest over usage constraints and image.
+ * @param flash_exec[out] flash_exec token on success.
+ * @return kErrorOk if both verifications succeed, else error code.
+ */
+rom_error_t owner_verify_hybrid_mldsa(
+    const owner_keydata_t *key,
+    const ecdsa_p256_signature_t *ecdsa_sig,
+    const sigverify_mldsa87_public_key_t *mldsa_key,
+    const sigverify_mldsa87_signature_t *mldsa_sig,
+    const hmac_digest_t *ecdsa_digest,
+    const hmac_digest_sha384_t *mldsa_digest,
+    uint32_t *flash_exec);
 
 #endif  // OPENTITAN_SW_DEVICE_SILICON_CREATOR_LIB_OWNERSHIP_OWNER_VERIFY_H_

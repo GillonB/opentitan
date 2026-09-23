@@ -39,5 +39,16 @@ rom_error_t manifest_ext_get_isfb(const manifest_t *manifest,
   return MockManifest::Instance().Isfb(manifest, isfb);
 }
 
+rom_error_t manifest_ext_get_mldsa_key(
+    const manifest_t *manifest, const manifest_ext_mldsa_key_t **mldsa_key) {
+  return MockManifest::Instance().MldsaKey(manifest, mldsa_key);
+}
+
+rom_error_t manifest_ext_get_mldsa_signature(
+    const manifest_t *manifest,
+    const manifest_ext_mldsa_signature_t **mldsa_signature) {
+  return MockManifest::Instance().MldsaSignature(manifest, mldsa_signature);
+}
+
 }  // extern "C"
 }  // namespace rom_test

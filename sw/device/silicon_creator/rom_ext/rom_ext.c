@@ -29,6 +29,7 @@
 #include "sw/device/silicon_creator/lib/drivers/ibex.h"
 #include "sw/device/silicon_creator/lib/drivers/keymgr_dpe.h"
 #include "sw/device/silicon_creator/lib/drivers/lifecycle.h"
+#include "sw/device/silicon_creator/lib/drivers/otbn.h"
 #include "sw/device/silicon_creator/lib/drivers/otp.h"
 #include "sw/device/silicon_creator/lib/drivers/pinmux.h"
 #include "sw/device/silicon_creator/lib/drivers/retention_sram.h"
@@ -415,6 +416,7 @@ static rom_error_t rom_ext_try_next_stage(boot_data_t *boot_data,
     slot[i] = error;
     if (error != kErrorOk) {
       dbg_printf("verifyfail: Slot%c;%x\r\n", slot_id, error);
+      HARDENED_CHECK_EQ(sc_otbn_dmem_sec_wipe(), kErrorOk);
       continue;
     }
     HARDENED_CHECK_EQ(nvm_exec, kSigverifyFlashExec);

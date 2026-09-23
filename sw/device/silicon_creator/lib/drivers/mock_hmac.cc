@@ -43,5 +43,19 @@ void hmac_sha256_save(hmac_context_t *ctx) {
 void hmac_sha256_restore(const hmac_context_t *ctx) {
   MockHmac::Instance().sha256_restore(ctx);
 }
+
+void hmac_sha384_configure(bool big_endian_digest) {
+  MockHmac::Instance().sha384_configure(big_endian_digest);
+}
+
+void hmac_sha384_init(void) { MockHmac::Instance().sha384_init(); }
+
+void hmac_sha384_final(hmac_digest_sha384_t *digest) {
+  MockHmac::Instance().sha384_final(digest);
+}
+
+void hmac_sha384(const void *data, size_t len, hmac_digest_sha384_t *digest) {
+  MockHmac::Instance().sha384(data, len, digest);
+}
 }  // extern "C"
 }  // namespace rom_test

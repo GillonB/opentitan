@@ -137,5 +137,51 @@ TEST_F(ManifestTest, ExtSpxKeyGet) {
   EXPECT_EQ(&result->header, header);
 }
 
+TEST_F(ManifestTest, ExtMldsaKeyGet) {
+  char flash[CHIP_ROM_EXT_RESIZABLE_SIZE_MAX];
+  memset(flash, 0, sizeof(flash));
+  size_t ext_offset = CHIP_ROM_EXT_SIZE_MAX;
+
+  manifest_t *manifest = reinterpret_cast<manifest_t *>(&flash[0]);
+  memcpy(manifest, &manifest_, sizeof(manifest_));
+  manifest->length = ext_offset + sizeof(manifest_ext_mldsa_key_t);
+
+  manifest_ext_table_entry_t *entry = &manifest->extensions.entries[5];
+  entry->identifier = kManifestExtIdMldsaKey;
+  entry->offset = ext_offset;
+
+  manifest_ext_header_t *header =
+      reinterpret_cast<manifest_ext_header_t *>(&flash[ext_offset]);
+  header->identifier = kManifestExtIdMldsaKey;
+  header->name = kManifestExtNameMldsaKey;
+
+  const manifest_ext_mldsa_key_t *result = nullptr;
+  EXPECT_EQ(manifest_ext_get_mldsa_key(manifest, &result), kErrorOk);
+  EXPECT_EQ(&result->header, header);
+}
+
+TEST_F(ManifestTest, ExtMldsaSignatureGet) {
+  char flash[CHIP_ROM_EXT_RESIZABLE_SIZE_MAX];
+  memset(flash, 0, sizeof(flash));
+  size_t ext_offset = CHIP_ROM_EXT_SIZE_MAX;
+
+  manifest_t *manifest = reinterpret_cast<manifest_t *>(&flash[0]);
+  memcpy(manifest, &manifest_, sizeof(manifest_));
+  manifest->length = ext_offset + sizeof(manifest_ext_mldsa_signature_t);
+
+  manifest_ext_table_entry_t *entry = &manifest->extensions.entries[6];
+  entry->identifier = kManifestExtIdMldsaSignature;
+  entry->offset = ext_offset;
+
+  manifest_ext_header_t *header =
+      reinterpret_cast<manifest_ext_header_t *>(&flash[ext_offset]);
+  header->identifier = kManifestExtIdMldsaSignature;
+  header->name = kManifestExtNameMldsaSignature;
+
+  const manifest_ext_mldsa_signature_t *result = nullptr;
+  EXPECT_EQ(manifest_ext_get_mldsa_signature(manifest, &result), kErrorOk);
+  EXPECT_EQ(&result->header, header);
+}
+
 }  // namespace
 }  // namespace manifest_unittest

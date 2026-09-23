@@ -303,7 +303,9 @@ dual_cc_library(
     ),
     deps = dual_inputs(
         device = [
+            "//sw/device/silicon_creator/lib/drivers:otbn",
             "//sw/device/silicon_creator/lib/sigverify",
+            "//sw/device/silicon_creator/lib/sigverify:mldsa_verify",
         ],
         host = [
             "//sw/device/lib/base:global_mock",
@@ -314,6 +316,7 @@ dual_cc_library(
             ":datatypes",
             "//sw/device/silicon_creator/lib/base:util",
             "//sw/device/silicon_creator/lib/drivers:hmac",
+            "//sw/device/silicon_creator/lib/sigverify:mldsa_key",
             "//sw/device/silicon_creator/lib:error",
         ],
     ),

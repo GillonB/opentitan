@@ -17,6 +17,7 @@
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
 #include "sw/device/silicon_creator/lib/sigverify/rsa_key.h"
 #include "sw/device/silicon_creator/lib/sigverify/spx_key.h"
+#include "sw/device/silicon_creator/lib/sigverify/mldsa_key.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -415,13 +416,29 @@ enum {
    */
   kManifestExtIdIsfbErase = 0x45465349,
   /**
-   * ASCII "EXT0.
+   * ML-DSA-87 public key extension identifier.
+   */
+  kManifestExtIdMldsaKey = 0x5a3c9e6b,
+  /**
+   * ML-DSA-87 signature extension identifier.
+   */
+  kManifestExtIdMldsaSignature = 0x6d9a5b3c,
+  /**
+   * ASCII "EXT0".
    */
   kManifestExtNameSpxKey = 0x30545845,
   /**
-   * ASCII "EXT1.
+   * ASCII "EXT1".
    */
   kManifestExtNameSpxSignature = 0x31545845,
+  /**
+   * ASCII "EXT2".
+   */
+  kManifestExtNameMldsaKey = 0x32545845,
+  /**
+   * ASCII "EXT3".
+   */
+  kManifestExtNameMldsaSignature = 0x33545845,
 };
 
 /**
@@ -550,17 +567,47 @@ typedef struct manifest_ext_isfb_erase {
 } manifest_ext_isfb_erase_t;
 
 /**
+ * Manifest extension: ML-DSA-87 public key.
+ */
+typedef struct manifest_ext_mldsa_key {
+  /**
+   * Required manifest header.
+   */
+  manifest_ext_header_t header;
+  /**
+   * ML-DSA-87 public key used to sign the image.
+   */
+  sigverify_mldsa87_public_key_t key;
+} manifest_ext_mldsa_key_t;
+
+/**
+ * Manifest extension: ML-DSA-87 signature.
+ */
+typedef struct manifest_ext_mldsa_signature {
+  /**
+   * Required manifest header.
+   */
+  manifest_ext_header_t header;
+  /**
+   * ML-DSA-87 signature of the image.
+   */
+  sigverify_mldsa87_signature_t signature;
+} manifest_ext_mldsa_signature_t;
+
+/**
  * Table of manifest extensions.
  *
  * Columns: Table index, type name, extenstion name, identifier, signed or not.
  */
 // clang-format off
 #define MANIFEST_EXTENSIONS(X) \
-  X(0, manifest_ext_spx_key_t,       spx_key,       kManifestExtIdSpxKey,       true ) \
-  X(1, manifest_ext_spx_signature_t, spx_signature, kManifestExtIdSpxSignature, false) \
-  X(2, manifest_ext_secver_write_t,  secver_write,  kManifestExtIdSecVerWrite,  true)  \
-  X(3, manifest_ext_isfb_t,          isfb,          kManifestExtIdIsfb,         true)  \
-  X(4, manifest_ext_isfb_erase_t,    isfb_erase,    kManifestExtIdIsfbErase,    true)
+  X(0, manifest_ext_spx_key_t,         spx_key,         kManifestExtIdSpxKey,         true ) \
+  X(1, manifest_ext_spx_signature_t,   spx_signature,   kManifestExtIdSpxSignature,   false) \
+  X(2, manifest_ext_secver_write_t,    secver_write,    kManifestExtIdSecVerWrite,    true ) \
+  X(3, manifest_ext_isfb_t,            isfb,            kManifestExtIdIsfb,           true ) \
+  X(4, manifest_ext_isfb_erase_t,      isfb_erase,      kManifestExtIdIsfbErase,      true ) \
+  X(5, manifest_ext_mldsa_key_t,       mldsa_key,       kManifestExtIdMldsaKey,       true ) \
+  X(6, manifest_ext_mldsa_signature_t, mldsa_signature, kManifestExtIdMldsaSignature, false)
 // clang-format on
 
 #if defined(OT_PLATFORM_RV32) || defined(MANIFEST_UNIT_TEST_)
@@ -722,6 +769,11 @@ rom_error_t manifest_ext_get_isfb(const manifest_t *manifest,
                                   const manifest_ext_isfb_t **isfb);
 rom_error_t manifest_ext_get_isfb_erase(
     const manifest_t *manifest, const manifest_ext_isfb_erase_t **isfb_erase);
+rom_error_t manifest_ext_get_mldsa_key(
+    const manifest_t *manifest, const manifest_ext_mldsa_key_t **mldsa_key);
+rom_error_t manifest_ext_get_mldsa_signature(
+    const manifest_t *manifest,
+    const manifest_ext_mldsa_signature_t **mldsa_signature);
 
 #endif  // defined(OT_PLATFORM_RV32) || defined(MANIFEST_UNIT_TEST_)
 

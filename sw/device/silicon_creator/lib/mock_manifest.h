@@ -28,6 +28,11 @@ class MockManifest : public global_mock::GlobalMock<MockManifest> {
                const manifest_ext_spx_signature_t **spx_signature));
   MOCK_METHOD(rom_error_t, Isfb,
               (const manifest_t *, const manifest_ext_isfb_t **isfb));
+  MOCK_METHOD(rom_error_t, MldsaKey,
+              (const manifest_t *, const manifest_ext_mldsa_key_t **mldsa_key));
+  MOCK_METHOD(rom_error_t, MldsaSignature,
+              (const manifest_t *,
+               const manifest_ext_mldsa_signature_t **mldsa_signature));
 };
 
 }  // namespace internal
