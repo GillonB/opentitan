@@ -46,12 +46,14 @@
 #include "sw/device/silicon_creator/lib/shutdown.h"
 #include "sw/device/silicon_creator/lib/sigverify/sigverify.h"
 #include "sw/device/silicon_creator/lib/stack_utilization.h"
+#include "sw/device/silicon_creator/lib/sigverify/mldsa_verify.h"
 #include "sw/device/silicon_creator/rom/boot_policy.h"
 #include "sw/device/silicon_creator/rom/boot_policy_ptrs.h"
 #include "sw/device/silicon_creator/rom/bootstrap.h"
 #include "sw/device/silicon_creator/rom/rom_epmp.h"
 #include "sw/device/silicon_creator/rom/rom_state.h"
 #include "sw/device/silicon_creator/rom/sigverify_keys_ecdsa_p256.h"
+#include "sw/device/silicon_creator/rom/sigverify_keys_mldsa.h"
 #include "sw/device/silicon_creator/rom/sigverify_keys_spx.h"
 #include "sw/device/silicon_creator/rom/sigverify_otp_keys.h"
 
@@ -366,6 +368,24 @@ static rom_error_t rom_verify(const manifest_t *manifest, uint32_t *nvm_exec) {
       &sigverify_ctx,
       sigverify_ecdsa_p256_key_id_get(&manifest->ecdsa_public_key), lc_state,
       &ecdsa_key));
+  // ML-DSA-87 key and signature extensions.
+  const sigverify_rom_mldsa_key_t *mldsa_key = NULL;
+  const sigverify_mldsa87_signature_t *mldsa_signature = NULL;
+  const manifest_ext_mldsa_key_t *ext_mldsa_key = NULL;
+  const manifest_ext_mldsa_signature_t *ext_mldsa_signature = NULL;
+  rom_error_t mldsa_err = manifest_ext_get_mldsa_key(manifest, &ext_mldsa_key);
+  mldsa_err += manifest_ext_get_mldsa_signature(manifest, &ext_mldsa_signature);
+  bool mldsa_present = false;
+  if (mldsa_err == kErrorOk * 2) {
+    mldsa_present = true;
+    mldsa_signature = &ext_mldsa_signature->signature;
+    HARDENED_RETURN_IF_ERROR(sigverify_mldsa_key_get(
+        &sigverify_ctx, sigverify_mldsa87_key_id_get(&ext_mldsa_key->key),
+        &ext_mldsa_key->key, lc_state, &mldsa_key));
+  } else if (mldsa_err != (rom_error_t)(kErrorManifestBadExtension * 2)) {
+    return kErrorManifestBadExtension;
+  }
+
   // SPX+ key.
   const sigverify_spx_key_t *spx_key = NULL;
   sigverify_spx_config_id_t spx_config = 0;
@@ -419,32 +439,63 @@ static rom_error_t rom_verify(const manifest_t *manifest, uint32_t *nvm_exec) {
   memcpy(&boot_measurements.rom_ext, &rev_digest,
          sizeof(boot_measurements.rom_ext));
 
+  // Compute SHA-384 message digest for ML-DSA if present.
+  hmac_digest_sha384_t act_digest_384;
+  if (mldsa_present) {
+    hmac_sha384_configure(true);
+    hmac_sha256_start();
+    hmac_sha256_update(&usage_constraints_from_hw,
+                       sizeof(usage_constraints_from_hw));
+    hmac_sha256_update(digest_region.start, digest_region.length);
+    hmac_sha256_process();
+    hmac_sha384_final(&act_digest_384);
+    // Note: hmac_sha384_configure(true) already produces the digest in natural
+    // big-endian order in memory. Do not call util_reverse_bytes.
+  }
+
   CFI_FUNC_COUNTER_INCREMENT(rom_counters, kCfiRomVerify, 2);
 
   /**
-   * Verify the ECDSA/SPX+ signatures of ROM_EXT.
-   *
-   * We swap the order of signature verifications randomly.
+   * Verify the signatures of ROM_EXT.
    */
   *nvm_exec = 0;
-  if (rnd_uint32() < 0x80000000) {
-    HARDENED_RETURN_IF_ERROR(sigverify_ecdsa_p256_verify(
-        &manifest->ecdsa_signature, ecdsa_key, &rev_digest, nvm_exec));
-
-    return sigverify_spx_verify(
-        spx_signature, spx_key, spx_config, lc_state,
-        &usage_constraints_from_hw, sizeof(usage_constraints_from_hw),
-        anti_rollback, anti_rollback_len, digest_region.start,
-        digest_region.length, &fwd_digest, nvm_exec);
+  if (mldsa_present) {
+    // Dual-signature verification (ECDSA P-256 + ML-DSA-87).
+    if (rnd_uint32() < 0x80000000) {
+      HARDENED_RETURN_IF_ERROR(sigverify_ecdsa_p256_verify(
+          &manifest->ecdsa_signature, ecdsa_key, &rev_digest, nvm_exec));
+      HARDENED_RETURN_IF_ERROR(mldsa_verify(
+          &ext_mldsa_key->key, mldsa_signature, &act_digest_384, nvm_exec));
+    } else {
+      HARDENED_RETURN_IF_ERROR(mldsa_verify(
+          &ext_mldsa_key->key, mldsa_signature, &act_digest_384, nvm_exec));
+      HARDENED_RETURN_IF_ERROR(sigverify_ecdsa_p256_verify(
+          &manifest->ecdsa_signature, ecdsa_key, &rev_digest, nvm_exec));
+    }
+    // Restore OTBN boot services app after ML-DSA verification has completed.
+    HARDENED_RETURN_IF_ERROR(otbn_boot_app_load());
+    return kErrorOk;
   } else {
-    HARDENED_RETURN_IF_ERROR(sigverify_spx_verify(
-        spx_signature, spx_key, spx_config, lc_state,
-        &usage_constraints_from_hw, sizeof(usage_constraints_from_hw),
-        anti_rollback, anti_rollback_len, digest_region.start,
-        digest_region.length, &fwd_digest, nvm_exec));
+    // Legacy dual-signature verification (ECDSA P-256 + SPX+).
+    if (rnd_uint32() < 0x80000000) {
+      HARDENED_RETURN_IF_ERROR(sigverify_ecdsa_p256_verify(
+          &manifest->ecdsa_signature, ecdsa_key, &rev_digest, nvm_exec));
 
-    return sigverify_ecdsa_p256_verify(&manifest->ecdsa_signature, ecdsa_key,
-                                       &rev_digest, nvm_exec);
+      return sigverify_spx_verify(
+          spx_signature, spx_key, spx_config, lc_state,
+          &usage_constraints_from_hw, sizeof(usage_constraints_from_hw),
+          anti_rollback, anti_rollback_len, digest_region.start,
+          digest_region.length, &fwd_digest, nvm_exec);
+    } else {
+      HARDENED_RETURN_IF_ERROR(sigverify_spx_verify(
+          spx_signature, spx_key, spx_config, lc_state,
+          &usage_constraints_from_hw, sizeof(usage_constraints_from_hw),
+          anti_rollback, anti_rollback_len, digest_region.start,
+          digest_region.length, &fwd_digest, nvm_exec));
+
+      return sigverify_ecdsa_p256_verify(&manifest->ecdsa_signature, ecdsa_key,
+                                         &rev_digest, nvm_exec);
+    }
   }
 }
 

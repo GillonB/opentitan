@@ -7,7 +7,9 @@
 
 #include <stdint.h>
 
+#include "sw/device/silicon_creator/lib/drivers/hmac.h"
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
+#include "sw/device/silicon_creator/lib/sigverify/mldsa_key.h"
 #include "sw/device/silicon_creator/lib/sigverify/rsa_key.h"
 #include "sw/device/silicon_creator/lib/sigverify/spx_key.h"
 
@@ -262,6 +264,52 @@ typedef union sigverify_rom_spx_key {
 static_assert(
     sizeof(sigverify_rom_spx_key_entry_t) == sizeof(sigverify_rom_spx_key_t),
     "Size of an SPX public key entry must be equal to the size of a key");
+
+/**
+ * An ML-DSA-87 pinned public key entry stored in ROM OTP cache.
+ *
+ * This struct must start with the common initial sequence
+ * `sigverify_rom_key_header_t`.
+ * In OpenTitan Gen 2, OTP stores 48-byte SHA-384 digests of ML-DSA-87 public keys.
+ */
+typedef struct sigverify_rom_mldsa_key_entry {
+  /**
+   * Type of the key.
+   */
+  sigverify_key_type_t key_type;
+  /**
+   * SHA-384 digest of the ML-DSA-87 public key.
+   * The first word digest[0] matches the key_id (common initial sequence).
+   */
+  hmac_digest_sha384_t digest;
+} sigverify_rom_mldsa_key_entry_t;
+
+OT_ASSERT_MEMBER_OFFSET(sigverify_rom_mldsa_key_entry_t, key_type, 0);
+OT_ASSERT_MEMBER_OFFSET(sigverify_rom_mldsa_key_entry_t, digest.digest[0], 4);
+static_assert(offsetof(sigverify_rom_key_header_t, key_type) ==
+                  offsetof(sigverify_rom_mldsa_key_entry_t, key_type),
+              "Invalid key_type offset.");
+static_assert(offsetof(sigverify_rom_key_header_t, key_id) ==
+                  offsetof(sigverify_rom_mldsa_key_entry_t, digest.digest[0]),
+              "Invalid key_id offset.");
+
+/**
+ * Union type to inspect the common initial sequence of ML-DSA-87 public key digests.
+ */
+typedef union sigverify_rom_mldsa_key {
+  /**
+   * Common initial sequence.
+   */
+  sigverify_rom_key_header_t key_header;
+  /**
+   * Actual ML-DSA-87 pinned key entry.
+   */
+  sigverify_rom_mldsa_key_entry_t entry;
+} sigverify_rom_mldsa_key_t;
+
+static_assert(
+    sizeof(sigverify_rom_mldsa_key_entry_t) == sizeof(sigverify_rom_mldsa_key_t),
+    "Size of an ML-DSA public key entry must be equal to the size of a key");
 
 #ifdef __cplusplus
 }  // extern "C"
