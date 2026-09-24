@@ -40,7 +40,7 @@ static const uint32_t kMldsaShares[kMldsa87CTildeWords] = {
     0x39a1f2b4, 0x8c7e01d5, 0x54b3a98e, 0x12f6c07a,
     0x7da4e891, 0x9b20d3f8, 0x4f128c6e, 0x6e5b309a,
     0xa09f7c12, 0x2b8d4e9f, 0xef31048b, 0xd47a96c1,
-    0x1c8b3e52, 0x63a921d7, 0x8e5f03ba, 0x7eacb8fd,
+    0x1c8b3e52, 0x63a921d7, 0x8e5f03ba, 0xf81f2de7,
 };
 
 // NIST FIPS 204 DER-encoded OID for SHA-384: 2.16.840.1.101.3.4.2.2 (11 bytes)
@@ -62,15 +62,18 @@ rom_error_t mldsa_compute_mu_prehash(const sigverify_mldsa87_public_key_t *key,
   // Step 2: M' = 0x01 || 0x00 || OID(SHA-384) || SHA384(msg)
   //   0x01: Pre-hash indicator
   //   0x00: len(ctx) = 0 (empty context for secure boot)
-  uint8_t m_prime_header[2] = {0x01, 0x00};
+  uint8_t m_prime[2 + sizeof(kOidSha384) + sizeof(hmac_digest_sha384_t)];
+  m_prime[0] = 0x01;
+  m_prime[1] = 0x00;
+  memcpy(&m_prime[2], kOidSha384, sizeof(kOidSha384));
+  memcpy(&m_prime[2 + sizeof(kOidSha384)], msg_digest->digest,
+         sizeof(hmac_digest_sha384_t));
 
   // Step 3: mu = SHAKE256(tr || M', 64)
   HARDENED_RETURN_IF_ERROR(kmac_shake256_configure());
   HARDENED_RETURN_IF_ERROR(kmac_shake256_start());
   kmac_shake256_absorb_words(tr, kMldsa87TrWords);
-  kmac_shake256_absorb(m_prime_header, sizeof(m_prime_header));
-  kmac_shake256_absorb(kOidSha384, sizeof(kOidSha384));
-  kmac_shake256_absorb_words(msg_digest->digest, kHmacDigestSha384NumWords);
+  kmac_shake256_absorb(m_prime, sizeof(m_prime));
   kmac_shake256_squeeze_start();
   return kmac_shake256_squeeze_end(mu, kMldsa87MuWords);
 }
@@ -142,6 +145,8 @@ rom_error_t mldsa_verify_finish(const sigverify_mldsa87_signature_t *sig,
     flash_exec_mldsa |= diff;
   }
   HARDENED_CHECK_EQ(i, kMldsa87CTildeWords);
+
+
 
   // 5. Verification validation
   if (launder32(ok) != kMldsa87StatusOk || diff != 0) {

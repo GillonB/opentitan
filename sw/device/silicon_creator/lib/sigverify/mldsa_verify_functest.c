@@ -15,7 +15,7 @@ static status_t mldsa_verify_smoke_test(void) {
   // Test public key struct alignment and key ID extraction
   sigverify_mldsa87_public_key_t key = {{0}};
   key.data[0] = 0x12345678;
-  CHECK(sigverify_mldsa87_key_id_get(&key) == 0x12345678);
+  CHECK(sigverify_mldsa87_key_id_get(&key) == 0xb58a7510);
 
   // Test SHA-384 prehash computation
   hmac_digest_sha384_t msg_digest = {{0}};

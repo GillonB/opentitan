@@ -233,6 +233,7 @@ cc_library(
     hdrs = ["mldsa_key.h"],
     deps = [
         "//sw/device/lib/base:macros",
+        "//sw/device/silicon_creator/lib/drivers:hmac",
     ],
 )
 
@@ -246,6 +247,7 @@ cc_library(
         "//sw/device/lib/base:hardened",
         "//sw/device/lib/base:hardened_memory",
         "//sw/device/lib/base:macros",
+        "//sw/device/silicon_creator/lib:dbg_print",
         "//sw/device/silicon_creator/lib:error",
         "//sw/device/silicon_creator/lib/drivers:hmac",
         "//sw/device/silicon_creator/lib/drivers:kmac",
