@@ -303,6 +303,8 @@ dual_cc_library(
     ),
     deps = dual_inputs(
         device = [
+            "//sw/device/silicon_creator/lib:otbn_boot_services",
+            "//sw/device/silicon_creator/lib/cert:dice_keys",
             "//sw/device/silicon_creator/lib/drivers:otbn",
             "//sw/device/silicon_creator/lib/sigverify",
             "//sw/device/silicon_creator/lib/sigverify:mldsa_verify",

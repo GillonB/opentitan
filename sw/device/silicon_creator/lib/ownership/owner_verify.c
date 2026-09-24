@@ -5,8 +5,10 @@
 #include "sw/device/silicon_creator/lib/ownership/owner_verify.h"
 
 #include "sw/device/silicon_creator/lib/base/util.h"
+#include "sw/device/silicon_creator/lib/cert/dice_keys.h"
 #include "sw/device/silicon_creator/lib/drivers/otbn.h"
 #include "sw/device/silicon_creator/lib/error.h"
+#include "sw/device/silicon_creator/lib/otbn_boot_services.h"
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
 #include "sw/device/silicon_creator/lib/sigverify/mldsa_verify.h"
 #include "sw/device/silicon_creator/lib/sigverify/sigverify.h"
@@ -190,7 +192,7 @@ rom_error_t owner_verify_hybrid_mldsa(
   hmac_digest_t pk_digest;
   hmac_sha256(mldsa_key->data, kSigverifyMldsa87PublicKeyBytes, &pk_digest);
   uint32_t key_mismatch = 0;
-  for (size_t i = 0; launder32(i) < ARRAYSIZE(pk_digest.digest); ++i) {
+  for (size_t i = 0; launder32(i) < ARRAYSIZE(key->hybrid_mldsa.mldsa_digest); ++i) {
     key_mismatch |= pk_digest.digest[i] ^ key->hybrid_mldsa.mldsa_digest[i];
   }
   if (launder32(key_mismatch) != 0) {
@@ -202,6 +204,12 @@ rom_error_t owner_verify_hybrid_mldsa(
   uint32_t mldsa_flash_exec = 0;
   HARDENED_RETURN_IF_ERROR(
       mldsa_verify(mldsa_key, mldsa_sig, mldsa_digest, &mldsa_flash_exec));
+
+  // Restore OTBN boot services app for subsequent boot stages (DICE / Attestation)
+  // and re-save CDI_0 attestation key which was wiped by ML-DSA execution.
+  HARDENED_RETURN_IF_ERROR(otbn_boot_app_load());
+  HARDENED_RETURN_IF_ERROR(otbn_boot_attestation_key_save(
+      kDiceKeyCdi0.keygen_seed_idx, *kDiceKeyCdi0.keymgr_dpe_diversifier));
 
   // Dual secret sharing token reduction
   if (flash_exec) {

@@ -16,6 +16,7 @@ cc_library(
         "app_dev_ecdsa_p256.h",
         "app_dev_spx.h",
         "app_prod_ecdsa_p256.h",
+        "app_prod_mldsa87.h",
         "app_prod_spx.h",
         "app_test_ecdsa_p256.h",
         "owner_ecdsa_p256.h",

@@ -150,6 +150,9 @@ rom_error_t owner_block_application_key_check(
     case kOwnershipKeyAlgEcdsaP256:
     case kOwnershipKeyAlgHybridSpxPure:
     case kOwnershipKeyAlgHybridSpxPrehash:
+    case kOwnershipKeyAlgHybridMldsa87:
+    case kOwnershipKeyAlgMldsa87Pure:
+    case kOwnershipKeyAlgMldsa87Prehash:
       break;
     default:
       return kErrorOwnershipInvalidAlgorithm;
