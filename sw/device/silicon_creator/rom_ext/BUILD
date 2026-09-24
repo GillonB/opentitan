@@ -206,6 +206,7 @@ cc_library(
     hdrs = ["rom_ext_verify.h"],
     deps = [
         ":rom_ext_boot_policy",
+        "//sw/device/silicon_creator/lib/base:util",
         "//sw/device/silicon_creator/lib:boot_data",
         "//sw/device/silicon_creator/lib:dbg_print",
         "//sw/device/silicon_creator/lib:error",

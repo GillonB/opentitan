@@ -6,6 +6,7 @@
 
 #include <string.h>
 
+#include "sw/device/silicon_creator/lib/base/util.h"
 #include "sw/device/silicon_creator/lib/base/boot_measurements.h"
 #include "sw/device/silicon_creator/lib/boot_data.h"
 #include "sw/device/silicon_creator/lib/dbg_print.h"
@@ -101,12 +102,15 @@ rom_error_t rom_ext_verify(const manifest_t *manifest, char slot_id,
   if (ext_mldsa_key != NULL && ext_mldsa_signature != NULL) {
     // Compute SHA-384 message digest for ML-DSA
     hmac_digest_sha384_t act_digest_384;
-    hmac_sha384_init();
+    hmac_sha384_configure(true);
+    hmac_sha256_start();
     hmac_sha256_update(&usage_constraints_from_hw,
                        sizeof(usage_constraints_from_hw));
     hmac_sha256_update(digest_region.start, digest_region.length);
     hmac_sha256_process();
     hmac_sha384_final(&act_digest_384);
+    // Note: hmac_sha384_configure(true) already produces the digest in natural
+    // big-endian order in memory. Do not call util_reverse_bytes.
 
     RETURN_IF_ERROR(owner_verify_hybrid_mldsa(
         &keyring->key[*verify_key]->data, &manifest->ecdsa_signature,

@@ -377,7 +377,7 @@ static rom_error_t rom_ext_boot(boot_data_t *boot_data, boot_log_t *boot_log,
   // Lock the ownership info pages.
   ownership_pages_lockdown(boot_data, /*rescue=*/kHardenedBoolFalse);
 
-  dbg_print_epmp();
+  dbg_printf("booting BL0 at 0x%x\r\n", (unsigned int)entry_point);
 
   // Verify expectations before jumping to owner code.
   // TODO: we really want to call rnd_uint32 here to select a random starting
