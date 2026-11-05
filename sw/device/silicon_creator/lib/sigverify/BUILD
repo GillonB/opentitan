@@ -38,7 +38,10 @@ cc_library(
     srcs = ["mldsa87_key.c"],
     hdrs = ["mldsa87_key.h"],
     deps = [
+        "//sw/device/lib/base:hardened",
         "//sw/device/lib/base:macros",
+        "//sw/device/silicon_creator/lib:error",
+        "//sw/device/silicon_creator/lib/drivers:kmac",
     ],
 )
 
@@ -331,3 +334,33 @@ opentitan_test(
         "//sw/device/silicon_creator/lib/sigverify/sigverify_tests:sigverify_testvectors_wycheproof",
     ],
 )
+
+cc_library(
+    name = "mldsa_verify",
+    srcs = ["mldsa_verify.c"],
+    hdrs = ["mldsa_verify.h"],
+    deps = [
+        ":mldsa87_key",
+        "//sw/device/lib/base:hardened",
+        "//sw/device/lib/base:hardened_memory",
+        "//sw/device/lib/base:macros",
+        "//sw/device/silicon_creator/lib:error",
+        "//sw/device/silicon_creator/lib/drivers:kmac",
+        "//sw/device/silicon_creator/lib/drivers:lifecycle",
+        "//sw/device/silicon_creator/lib/drivers:otbn",
+        "//sw/otbn/crypto/mldsa87:run_mldsa87",
+    ],
+)
+
+opentitan_test(
+    name = "mldsa_verify_functest",
+    srcs = ["mldsa_verify_functest.c"],
+    exec_env = EARLGREY_TEST_ENVS,
+    deps = [
+        ":mldsa_verify",
+        "//sw/device/lib/base:hardened",
+        "//sw/device/lib/testing/test_framework:check",
+        "//sw/device/lib/testing/test_framework:ottf_main",
+    ],
+)
+

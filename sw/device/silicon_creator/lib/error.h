@@ -105,6 +105,9 @@ enum module_ {
   X(kErrorSigverifyBadSpxConfig,      ERROR_(10, kModuleSigverify, kInvalidArgument)), \
   X(kErrorSigverifyEcdsaNotFound,     ERROR_(11, kModuleSigverify, kNotFound)), \
   X(kErrorSigverifySpxNotFound,       ERROR_(12, kModuleSigverify, kNotFound)), \
+  X(kErrorSigverifyBadMldsaSignature, ERROR_(13, kModuleSigverify, kInvalidArgument)), \
+  X(kErrorSigverifyBadMldsaKey,       ERROR_(14, kModuleSigverify, kInvalidArgument)), \
+  X(kErrorSigverifyMldsaNotFound,     ERROR_(15, kModuleSigverify, kNotFound)), \
   \
   X(kErrorKeymgrInternal,             ERROR_(1, kModuleKeymgr, kInternal)), \
   \
@@ -274,7 +277,6 @@ enum module_ {
   X(kErrorPwrmgrInvalidRequestType,   ERROR_(2, kModulePwrmgr, kInvalidArgument)), \
   \
   X(kErrorGpioInvalidPin,             ERROR_(0, kModuleGpio, kInvalidArgument)), \
-  X(kErrorGpioInvalidInstance,        ERROR_(1, kModuleGpio, kInvalidArgument)), \
   X(kErrorUsbBadSetup,                ERROR_(0, kModuleUsb, kInvalidArgument)), \
   X(kErrorUsbBadEndpointNumber,       ERROR_(1, kModuleUsb, kInvalidArgument)), \
   \
