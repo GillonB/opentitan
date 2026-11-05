@@ -16,6 +16,7 @@
 #include "sw/device/silicon_creator/lib/ownership/keys/fake/app_dev_ecdsa_p256.h"
 #include "sw/device/silicon_creator/lib/ownership/keys/fake/app_dev_spx.h"
 #include "sw/device/silicon_creator/lib/ownership/keys/fake/app_prod_ecdsa_p256.h"
+#include "sw/device/silicon_creator/lib/ownership/keys/fake/app_prod_mldsa87.h"
 #include "sw/device/silicon_creator/lib/ownership/keys/fake/app_prod_spx.h"
 #include "sw/device/silicon_creator/lib/ownership/keys/fake/app_test_ecdsa_p256.h"
 #include "sw/device/silicon_creator/lib/ownership/keys/fake/owner_ecdsa_p256.h"
@@ -35,7 +36,7 @@
 
 // NOTE: if you update this version number, you must also update the version
 // number in the test library `sw/host/tests/ownership/transfer_lib.rs`.
-#define TEST_OWNER_CONFIG_VERSION 1
+#define TEST_OWNER_CONFIG_VERSION 5
 
 #ifndef TEST_OWNER_UPDATE_MODE
 #define TEST_OWNER_UPDATE_MODE kOwnershipUpdateModeOpen
@@ -278,6 +279,27 @@ rom_error_t sku_creator_owner_init(boot_data_t *bootdata) {
           },
   };
 
+  app = (owner_application_key_t *)((uintptr_t)app + app->header.length);
+  *app = (owner_application_key_t){
+      .header =
+          {
+              .tag = kTlvTagApplicationKey,
+              .length = kTlvLenApplicationKeyHybrid,
+          },
+      .key_alg = kOwnershipKeyAlgHybridMldsa87,
+      .key_domain = kOwnerAppDomainProd,
+      .key_diversifier = {0},
+      .usage_constraint = 0,
+      .data =
+          {
+              .hybrid_mldsa =
+                  {
+                      .ecdsa = APP_PROD_ECDSA_P256,
+                      .mldsa_digest = APP_PROD_MLDSA_DIGEST,
+                  },
+          },
+  };
+
   uintptr_t end = (uintptr_t)app + app->header.length;
 #ifdef WITH_RESCUE_PROTOCOL
   owner_rescue_config_t *rescue =
@@ -346,11 +368,6 @@ rom_error_t sku_creator_owner_init(boot_data_t *bootdata) {
   // Since this module should only get linked in to FPGA builds, we can simply
   // thunk the ownership state to LockedOwner.
   bootdata->ownership_state = TEST_OWNERSHIP_STATE;
-
-  // Set the nonce to something other than zero to test wildcard match for the
-  // detached signature.
-  bootdata->nonce.value[0] = 0xdeadbeef;
-  bootdata->nonce.value[1] = 0x12345678;
 
   // Write the configuration to both owner page 0.  The next boot of the ROM_EXT
   // will make a redundant copyh in page 1.

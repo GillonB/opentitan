@@ -59,8 +59,7 @@ hardened_bool_t owner_block_owner_key_equal(void) {
 hardened_bool_t owner_block_newversion_mode(void) {
   if (owner_page_valid[0] == kOwnerPageStatusSealed &&
       (owner_page[0].update_mode == kOwnershipUpdateModeNewVersion ||
-       owner_page[0].update_mode == kOwnershipUpdateModeSelfVersion ||
-       owner_page[0].update_mode == kOwnershipUpdateModeAnyVersion)) {
+       owner_page[0].update_mode == kOwnershipUpdateModeSelfVersion)) {
     return kHardenedBoolTrue;
   }
   return kHardenedBoolFalse;
@@ -151,6 +150,8 @@ rom_error_t owner_block_application_key_check(
     case kOwnershipKeyAlgEcdsaP256:
     case kOwnershipKeyAlgHybridSpxPure:
     case kOwnershipKeyAlgHybridSpxPrehash:
+    case kOwnershipKeyAlgHybridMldsa87:
+    case kOwnershipKeyAlgMldsa87Pure:
       break;
     default:
       return kErrorOwnershipInvalidAlgorithm;

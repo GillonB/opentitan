@@ -16,6 +16,7 @@ cc_library(
         "app_dev_ecdsa_p256.h",
         "app_dev_spx.h",
         "app_prod_ecdsa_p256.h",
+        "app_prod_mldsa87.h",
         "app_prod_spx.h",
         "app_test_ecdsa_p256.h",
         "owner_ecdsa_p256.h",
@@ -75,33 +76,13 @@ filegroup(
 )
 
 filegroup(
-    name = "owner_key_slh_dsa",
-    srcs = ["owner_slh_dsa.pem"],
-)
-
-filegroup(
-    name = "owner_key_slh_dsa_pub",
-    srcs = ["owner_slh_dsa.pub.pem"],
-)
-
-filegroup(
     name = "activate_key_spx",
     srcs = ["activate_spx.pem"],
 )
 
 filegroup(
-    name = "activate_key_slh_dsa",
-    srcs = ["activate_slh_dsa.pem"],
-)
-
-filegroup(
     name = "unlock_key_spx",
     srcs = ["unlock_spx.pem"],
-)
-
-filegroup(
-    name = "unlock_key_slh_dsa",
-    srcs = ["unlock_slh_dsa.pem"],
 )
 
 # The ownership e2e tests need access to both the app_prod_ecdsa and app_dev_pub public key files below.
@@ -127,9 +108,7 @@ pkg_files(
     srcs = [
         ":app_dev_pub",
         ":app_prod_ecdsa_pub",
-        ":app_prod_spx_pub",
         "//sw/device/silicon_creator/lib/ownership/keys/fake:ecdsa_keyset",
-        "//sw/device/silicon_creator/lib/ownership/keys/fake:slh_dsa_keyset",
         "//sw/device/silicon_creator/lib/ownership/keys/fake:spx_keyset",
     ],
 )
@@ -162,17 +141,6 @@ keyset(
     keys = {
         "app_prod_spx.pem": "app_prod_0",
         "app_dev_spx.pem": "app_dev_0:domain=PreHashedSha256",
-    },
-    profile = "local",
-    tool = "//signing/tokens:local",
-)
-
-keyset(
-    name = "slh_dsa_keyset",
-    build_setting_default = "",
-    keys = {
-        "app_prod_slh_dsa.pem": "app_prod_0",
-        "app_dev_slh_dsa.pem": "app_dev_0",
     },
     profile = "local",
     tool = "//signing/tokens:local",
