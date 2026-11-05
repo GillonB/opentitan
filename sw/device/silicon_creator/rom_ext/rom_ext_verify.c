@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "sw/device/silicon_creator/lib/base/boot_measurements.h"
+#include "sw/device/silicon_creator/lib/base/util.h"
 #include "sw/device/silicon_creator/lib/boot_data.h"
 #include "sw/device/silicon_creator/lib/dbg_print.h"
 #include "sw/device/silicon_creator/lib/drivers/rnd.h"
@@ -16,6 +17,8 @@
 #include "sw/device/silicon_creator/lib/ownership/owner_block.h"
 #include "sw/device/silicon_creator/lib/ownership/owner_verify.h"
 #include "sw/device/silicon_creator/lib/sigverify/ecdsa_p256_key.h"
+#include "sw/device/silicon_creator/lib/sigverify/mldsa87_key.h"
+#include "sw/device/silicon_creator/lib/sigverify/mldsa_verify.h"
 #include "sw/device/silicon_creator/lib/sigverify/usage_constraints.h"
 #include "sw/device/silicon_creator/rom_ext/rom_ext_boot_policy.h"
 
@@ -47,6 +50,24 @@ rom_error_t rom_ext_verify(const manifest_t *manifest, char slot_id,
       break;
     case kErrorManifestBadExtension * 2:
       // Both extensions absent: ECDSA only.
+      break;
+    default:
+      // One present, one absent: bad configuration.
+      return kErrorManifestBadExtension;
+  }
+
+  // Check if there is an ML-DSA-87 key.
+  const manifest_ext_mldsa87_key_t *ext_mldsa_key = NULL;
+  const manifest_ext_mldsa87_signature_t *ext_mldsa_signature = NULL;
+  rom_error_t mldsa_err = manifest_ext_get_mldsa87_key(manifest, &ext_mldsa_key);
+  mldsa_err += manifest_ext_get_mldsa87_signature(manifest, &ext_mldsa_signature);
+  switch ((uint32_t)mldsa_err) {
+    case kErrorOk * 2:
+      // Both extensions present: valid ML-DSA-87 signature.
+      key_id ^= sigverify_mldsa87_key_id_get((const sigverify_mldsa87_public_key_t *)&ext_mldsa_key->key);
+      break;
+    case kErrorManifestBadExtension * 2:
+      // Both extensions absent.
       break;
     default:
       // One present, one absent: bad configuration.
@@ -86,11 +107,27 @@ rom_error_t rom_ext_verify(const manifest_t *manifest, char slot_id,
                 "Unexpected BL0 digest size.");
   memcpy(&boot_measurements.bl0, &act_digest, sizeof(boot_measurements.bl0));
 
-  RETURN_IF_ERROR(owner_verify(
-      key_alg, &keyring->key[*verify_key]->data, &manifest->ecdsa_signature,
-      spx_signature, &usage_constraints_from_hw,
-      sizeof(usage_constraints_from_hw), NULL, 0, digest_region.start,
-      digest_region.length, &act_digest, flash_exec));
+  if (ext_mldsa_key != NULL && ext_mldsa_signature != NULL) {
+    uint32_t tr[kMldsa87TrWords];
+    RETURN_IF_ERROR(mldsa_compute_tr((const sigverify_mldsa87_public_key_t *)&ext_mldsa_key->key, tr));
+    uint32_t mu[kMldsa87MuWords];
+    RETURN_IF_ERROR(mldsa_compute_mu(tr, &usage_constraints_from_hw,
+                                     sizeof(usage_constraints_from_hw),
+                                     digest_region.start, digest_region.length,
+                                     mu));
+
+    RETURN_IF_ERROR(owner_verify_hybrid_mldsa(
+        &keyring->key[*verify_key]->data, &manifest->ecdsa_signature,
+        (const sigverify_mldsa87_public_key_t *)&ext_mldsa_key->key,
+        (const sigverify_mldsa87_signature_t *)&ext_mldsa_signature->signature,
+        &act_digest, mu, flash_exec));
+  } else {
+    RETURN_IF_ERROR(owner_verify(
+        key_alg, &keyring->key[*verify_key]->data, &manifest->ecdsa_signature,
+        spx_signature, &usage_constraints_from_hw,
+        sizeof(usage_constraints_from_hw), NULL, 0, digest_region.start,
+        digest_region.length, &act_digest, flash_exec));
+  }
 
   // Perform ISFB checks if the extension is present.
   if ((hardened_bool_t)owner_config->isfb != kHardenedBoolFalse) {

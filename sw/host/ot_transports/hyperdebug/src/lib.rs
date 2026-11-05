@@ -1090,8 +1090,13 @@ impl<B: Board> Flavor for ChipWhispererFlavor<B> {
         // as the serial number of the ChipWhisperer board. This is more
         // consistent since we usually identify CW+HD combinations by the
         // CW serial.
-        let cw =
-            Self::open_cw(usb_serial).with_context(|| format!("No {} found", B::BOARD_NAME))?;
+        let (cw, hd_serial) = match Self::open_cw(usb_serial) {
+            Ok(cw) => (cw, None),
+            Err(_) => (
+                Self::open_cw(None).with_context(|| format!("No {} found", B::BOARD_NAME))?,
+                usb_serial,
+            ),
+        };
         log::debug!("Found ChipWhisperer: {cw:?}");
         let cw_backend = cw.backend();
         let cw_backend_borrow = cw_backend.borrow();
@@ -1103,7 +1108,7 @@ impl<B: Board> Flavor for ChipWhispererFlavor<B> {
         // under the same hub (3.2). Hence, we remove the last port of the list for the comparison
         // below.
         cw_ports.pop();
-        let mut hd_devices = usb_context.scan(Some(usb_vid), Some(usb_pid), None, None)?;
+        let mut hd_devices = usb_context.scan(Some(usb_vid), Some(usb_pid), None, hd_serial)?;
         // If only one HD device was detected, assume that this is the one the user wants.
         if hd_devices.len() == 1 {
             return Ok((hd_devices.remove(0), cw));

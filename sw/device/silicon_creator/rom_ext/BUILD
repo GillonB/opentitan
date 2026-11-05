@@ -211,9 +211,13 @@ cc_library(
         "//sw/device/silicon_creator/lib:error",
         "//sw/device/silicon_creator/lib:manifest",
         "//sw/device/silicon_creator/lib/base:boot_measurements",
+        "//sw/device/silicon_creator/lib/base:util",
         "//sw/device/silicon_creator/lib/ownership:isfb",
         "//sw/device/silicon_creator/lib/ownership:owner_block",
         "//sw/device/silicon_creator/lib/ownership:owner_verify",
+        "//sw/device/silicon_creator/lib/sigverify:ecdsa_p256_key",
+        "//sw/device/silicon_creator/lib/sigverify:mldsa87_key",
+        "//sw/device/silicon_creator/lib/sigverify:mldsa_verify",
         "//sw/device/silicon_creator/lib/sigverify:usage_constraints",
     ],
 )

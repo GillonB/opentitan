@@ -11,6 +11,7 @@
 
 rom_ext_boot_policy_manifests_t rom_ext_boot_policy_manifests_get(
     const boot_data_t *boot_data) {
+  // Recompile with CHIP_ROM_EXT_SIZE_MAX = 0x20000
   const manifest_t *slot_a = rom_ext_boot_policy_manifest_a_get();
   const manifest_t *slot_b = rom_ext_boot_policy_manifest_b_get();
   uint32_t slot = boot_data->primary_bl0_slot;
