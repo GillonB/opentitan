@@ -19,9 +19,11 @@ extern "C" {
 
 enum {
   /**Maximum number of ECDSA keys supported in OTP. */
-  kSigVerifyOtpKeysEcdsaCount = 4,
+  kSigVerifyOtpKeysEcdsaCount = 3,
   /**Maximum number of SPX keys supported in OTP. */
-  kSigVerifyOtpKeysSpxCount = 4,
+  kSigVerifyOtpKeysSpxCount = 3,
+  /**Maximum number of ML-DSA keys supported in OTP. */
+  kSigVerifyOtpKeysMldsaCount = 3,
 };
 
 /**
@@ -35,15 +37,22 @@ enum {
  */
 typedef struct sigverify_otp_keys {
   /**
-   * ECDSA P-256 keys.
+   * ECDSA P-256 keys (3 keys * 68 B = 204 B).
    */
   sigverify_rom_ecdsa_p256_key_t ecdsa[kSigVerifyOtpKeysEcdsaCount];
   /**
-   * SPX keys.
+   * ML-DSA-87 pinned digests in OpenTitan Gen 2 (3 keys * 52 B = 156 B) or legacy SPX.
    */
-  sigverify_rom_spx_key_t spx[kSigVerifyOtpKeysSpxCount];
+  union {
+    sigverify_rom_spx_key_t spx[kSigVerifyOtpKeysSpxCount];
+    sigverify_rom_mldsa_key_t mldsa[kSigVerifyOtpKeysMldsaCount];
+  };
   /**
-   * HMAC digest of the ECDSA and SPX keys.
+   * Padding to maintain compatibility with the 464-byte partition layout.
+   */
+  uint8_t padding[72];
+  /**
+   * HMAC digest of the ECDSA and MLDSA keys.
    */
   hmac_digest_t integrity_measurement;
 } sigverify_otp_keys_t;
@@ -59,13 +68,20 @@ typedef struct sigverify_otp_keys {
  */
 typedef struct sigverify_otp_key_states {
   /**
-   * State of the ECDSA P-256 keys.
+   * State of the ECDSA P-256 keys (3 * 4 B = 12 B).
    */
   uint32_t ecdsa[kSigVerifyOtpKeysEcdsaCount];
   /**
-   * State of the SPX keys.
+   * State of the ML-DSA / SPX keys (3 * 4 B = 12 B).
    */
-  uint32_t spx[kSigVerifyOtpKeysSpxCount];
+  union {
+    uint32_t spx[kSigVerifyOtpKeysSpxCount];
+    uint32_t mldsa[kSigVerifyOtpKeysMldsaCount];
+  };
+  /**
+   * Padding to maintain 32-byte ROT_CREATOR_AUTH_STATE size (32 - 24 = 8 B).
+   */
+  uint32_t padding[2];
 } sigverify_otp_key_states_t;
 
 /**
@@ -73,7 +89,7 @@ typedef struct sigverify_otp_key_states {
  */
 typedef struct sigverify_otp_key_ctx {
   /**
-   * ECDSA and SPX keys.
+   * ECDSA and SPX/ML-DSA keys.
    */
   sigverify_otp_keys_t keys;
   /**
